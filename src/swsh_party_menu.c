@@ -456,7 +456,7 @@ static bool8 DecompressGraphics(void);
 static void InitPartyMenuWindows(u8);
 static void LoadPartyMenuWindows(void);
 static void ShowSelectedMonInfo(void);
-static void InitPartyMenuBoxes(u8);
+static bool8 InitPartyMenuBoxes(u8);
 static void LoadPartyMenuBoxes(u8);
 static bool8 CreatePartyMonSpritesLoop(void);
 static bool8 RenderPartyMenuBoxes(void);
@@ -788,6 +788,7 @@ static void InitPartyMenu(u8 menuType, u8 layout, u8 partyAction, bool8 keepCurs
     }
     else
     {
+        InitComfyAnims();
         gPartyMenu.menuType = menuType;
         gPartyMenu.exitCallback = callback;
         gPartyMenu.action = partyAction;
@@ -989,7 +990,11 @@ static bool8 ShowPartyMenu(void)
         gMain.state++;
         break;
     case 10:
-        InitPartyMenuBoxes(gPartyMenu.layout);
+        if (!InitPartyMenuBoxes(gPartyMenu.layout))
+        {
+            ExitPartyMenu();
+            return TRUE;
+        }
         sPartyMenuInternal->switchCounter = 0;
         gMain.state++;
         break;
@@ -1457,6 +1462,7 @@ static void FreePartyPointers(void)
         Free(sPartyMenuInternal);
         sPartyMenuInternal = NULL;
     }
+    FreeComfyAnims();
     if (sPartyBgTilemapBuffer)
     {
         Free(sPartyBgTilemapBuffer);
@@ -1480,10 +1486,14 @@ static void FreePartyPointers(void)
     FreeAllWindowBuffers();
 }
 
-static void InitPartyMenuBoxes(u8 layout)
+static bool8 InitPartyMenuBoxes(u8 layout)
 {
     sPartyMenuBoxes = Alloc(sizeof(struct PartyMenuBox[PARTY_SIZE]));
+    if (sPartyMenuBoxes == NULL)
+        return FALSE;
+
     LoadPartyMenuBoxes(layout);
+    return TRUE;
 }
 
 static void LoadPartyMenuBoxes(u8 layout)
