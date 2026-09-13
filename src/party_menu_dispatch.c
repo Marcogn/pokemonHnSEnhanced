@@ -1,34 +1,73 @@
 #include "global.h"
+#include "event_data.h"
 #include "party_menu.h"
 
 // Owns the party menu's public API (as declared in party_menu.h) and forwards
-// each call to whichever style variant is selected. For now there is only one
-// variant (HnS's existing two-column menu, src/party_menu.c, compiled under
-// the HnsPartyMenu_ prefix via include/party_menu_variant.h) - this commit
-// only proves the dispatch layer forwards correctly with no behaviour change.
-// The SwSh variant and the runtime style option are added in a later commit
-// of this phase (see docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.3).
+// each call to whichever style variant the player has selected
+// (VAR_PARTY_MENU_STYLE, see include/constants/global.h and
+// docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.4): HnS's existing two-column menu
+// (src/party_menu.c, compiled under the HnsPartyMenu_ prefix) or the SwSh-style
+// menu (src/swsh_party_menu.c, compiled under the SwShPartyMenu_ prefix), both
+// via include/party_menu_variant.h.
 //
 // The party menu's shared EWRAM state (gPartyMenu and friends),
 // gTutorMoves, and CanLearnTutorMove are NOT duplicated here - they stay
 // defined exactly once, in party_menu.c, and both variants (plus other
 // systems like scrcmd.c) reference that same instance via the existing
 // extern/plain declarations in party_menu.h.
+//
+// A handful of further functions on this list (BattleMoveIdToItemId, IsMoveHm,
+// MoveToHM, ItemUseCB_PokeBall, ItemUseCB_Mints, GetTMHMMoves) are, likewise,
+// single shared implementations with no UI-specific behaviour: swsh_party_menu.c
+// deliberately has no SwShPartyMenu_-prefixed copy of them (nothing internal to
+// that file calls them), so they always dispatch to the HnS-classic
+// implementation regardless of the selected style - see SHARED_DISPATCH_RET/VOID.
+
+static u8 GetPartyMenuStyle(void)
+{
+    u16 stored = VarGet(VAR_PARTY_MENU_STYLE);
+
+    if (stored == 0 || stored - 1 >= PARTY_MENU_STYLE_COUNT)
+        return PARTY_MENU_STYLE_DEFAULT;
+    return stored - 1;
+}
 
 #define HNS_FUNC(name) HnsPartyMenu_ ## name
+#define SWSH_FUNC(name) SwShPartyMenu_ ## name
 
 #define DISPATCH_RET(returnType, name, params, args) \
     extern returnType HNS_FUNC(name) params;         \
+    extern returnType SWSH_FUNC(name) params;        \
     returnType name params                           \
     {                                                 \
+        if (GetPartyMenuStyle() == PARTY_MENU_STYLE_SWSH) \
+            return SWSH_FUNC(name) args;             \
         return HNS_FUNC(name) args;                  \
     }
 
 #define DISPATCH_VOID(name, params, args) \
     extern void HNS_FUNC(name) params;    \
+    extern void SWSH_FUNC(name) params;   \
     void name params                      \
     {                                     \
-        HNS_FUNC(name) args;              \
+        if (GetPartyMenuStyle() == PARTY_MENU_STYLE_SWSH) \
+            SWSH_FUNC(name) args;         \
+        else                              \
+            HNS_FUNC(name) args;          \
+    }
+
+#define SHARED_DISPATCH_RET(returnType, name, params, args) \
+    extern returnType HNS_FUNC(name) params;                \
+    returnType name params                                  \
+    {                                                        \
+        return HNS_FUNC(name) args;                         \
+    }
+
+#define SHARED_DISPATCH_VOID(name, params, args) \
+    extern void HNS_FUNC(name) params;           \
+    void name params                              \
+    {                                              \
+        HNS_FUNC(name) args;                      \
     }
 
 DISPATCH_VOID(AnimatePartySlot, (u8 slot, u8 animNum), (slot, animNum))
@@ -54,10 +93,10 @@ DISPATCH_VOID(ItemUseCB_ReduceEV, (u8 taskId, TaskFunc task), (taskId, task))
 DISPATCH_VOID(ItemUseCB_PPRecovery, (u8 taskId, TaskFunc task), (taskId, task))
 DISPATCH_VOID(ItemUseCB_PPUp, (u8 taskId, TaskFunc task), (taskId, task))
 DISPATCH_RET(u16, ItemIdToBattleMoveId, (u16 item), (item))
-DISPATCH_RET(u16, BattleMoveIdToItemId, (u16 moveId), (moveId))
-DISPATCH_RET(bool8, IsMoveHm, (u16 move), (move))
+SHARED_DISPATCH_RET(u16, BattleMoveIdToItemId, (u16 moveId), (moveId))
+SHARED_DISPATCH_RET(bool8, IsMoveHm, (u16 move), (move))
 DISPATCH_RET(bool8, MonKnowsMove, (struct Pokemon *mon, u16 move), (mon, move))
-DISPATCH_RET(int, MoveToHM, (u16 move), (move))
+SHARED_DISPATCH_RET(int, MoveToHM, (u16 move), (move))
 DISPATCH_VOID(ItemUseCB_TMHM, (u8 taskId, TaskFunc task), (taskId, task))
 DISPATCH_VOID(ItemUseCB_RareCandy, (u8 taskId, TaskFunc task), (taskId, task))
 DISPATCH_VOID(ItemUseCB_SacredAsh, (u8 taskId, TaskFunc task), (taskId, task))
@@ -92,10 +131,14 @@ DISPATCH_VOID(MoveDeleterForgetMove, (void), ())
 DISPATCH_VOID(BufferMoveDeleterNicknameAndMove, (void), ())
 DISPATCH_VOID(GetNumMovesSelectedMonHas, (void), ())
 DISPATCH_VOID(MoveDeleterChooseMoveToForget, (void), ())
-DISPATCH_VOID(ItemUseCB_PokeBall, (u8 taskId, TaskFunc task), (taskId, task))
-DISPATCH_VOID(ItemUseCB_Mints, (u8 taskId, TaskFunc task), (taskId, task))
-DISPATCH_RET(u16, GetTMHMMoves, (u16 position), (position))
+SHARED_DISPATCH_VOID(ItemUseCB_PokeBall, (u8 taskId, TaskFunc task), (taskId, task))
+SHARED_DISPATCH_VOID(ItemUseCB_Mints, (u8 taskId, TaskFunc task), (taskId, task))
+SHARED_DISPATCH_RET(u16, GetTMHMMoves, (u16 position), (position))
 
+#undef SHARED_DISPATCH_VOID
+#undef SHARED_DISPATCH_RET
 #undef DISPATCH_VOID
 #undef DISPATCH_RET
+#undef SWSH_FUNC
 #undef HNS_FUNC
+

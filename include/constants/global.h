@@ -144,6 +144,13 @@
 #define OPTIONS_BATTLE_SPEED_3X    2
 #define OPTIONS_BATTLE_SPEED_COUNT 3
 
+// Party menu UI style option (Phase 4, docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.4).
+// Stored via VAR_PARTY_MENU_STYLE as style + 1 (0 = "never chosen").
+#define PARTY_MENU_STYLE_HNS     0
+#define PARTY_MENU_STYLE_SWSH    1
+#define PARTY_MENU_STYLE_COUNT   2
+#define PARTY_MENU_STYLE_DEFAULT PARTY_MENU_STYLE_SWSH
+
 #define DIR_NONE        0
 #define DIR_SOUTH       1
 #define DIR_NORTH       2

@@ -211,7 +211,8 @@ Re-measure after each phase lands and update the table below.
 | 4a — comfy_anim (heap-allocated) | 261172 B (99.63%, +4 B: the `gComfyAnims` pointer itself) | 972 B | 22508968 B (67.08%, +1152 B from Phase 3) |
 | 4b — dispatch layer, HnS-classic only | 261172 B (99.63%, unchanged) | 972 B | 22509912 B (67.08%, +944 B: 65 tiny forwarding functions) |
 | 4c — swsh_party_menu.c/.h port, `make modern` clean (0 errors, 0 warnings, 0 undefined references) | 261276 B (99.67%, +104 B from 4b) | 868 B | 22582824 B (67.30%, +72912 B from 4b) |
-| 4d–4f — dispatch wiring, `VAR_PARTY_MENU_STYLE` option, holistic review | _pending_ | | |
+| 4d — live dispatch (both variants) + `VAR_PARTY_MENU_STYLE` option | 261276 B (99.67%, unchanged: `VarGet`/`VarSet`-only, no new statics) | 868 B | 22585320 B (67.31%, +2496 B from 4c) |
+| 4e-4f — reproduce remaining HnS-specific behaviour, holistic review | _pending, see §5.7_ | | |
 
 ### 1.3 Commit hygiene
 
@@ -928,10 +929,25 @@ switch, not three.
    Commit. This proves the dispatch layer before any new UI exists.
 3. Re-encode the SwSh graphics to LZ77, add `src/data/swsh_party_menu.h`. Build
    (assets only, nothing references them yet). Commit.
-4. Add `src/swsh_party_menu.c` with the adapters. Expect this to be the long
-   part. Build. Commit.
-5. Reproduce HnS-specific party behaviour in the SwSh variant. Commit.
-6. Add the option entry + default. Commit.
+4. **Done.** Add `src/swsh_party_menu.c` with the adapters. Expect this to be
+   the long part. Build. Commit.
+5. **Done, inline with step 4** (not a separate pass): every HnS-specific
+   behaviour difference found while fixing compile/link errors (field moves,
+   item effects, rare candy, EV-reduce items, TM/HM/tutor move-learning,
+   toss/register/trade messages, evolution triggering, frontier bans, …) was
+   reproduced exactly against HnS's real source as part of that same fix, not
+   deferred — see §5.6.1 for the full list.
+6. **Done.** Add the option entry + default: `VAR_PARTY_MENU_STYLE` (repurposes
+   `VAR_UNUSED_0x40A8`, no `SaveBlock1`/`SaveBlock2` field added, per §5.4),
+   `PARTY_MENU_STYLE_HNS`/`_SWSH`/`_COUNT`/`_DEFAULT` in
+   `include/constants/global.h`, a "PARTY MENU" entry on the MENU_CUSTOM
+   options page (`src/options_plus_menu.c`, mirrors `MENUITEM_BATTLE_DARK_UI`'s
+   2-choice pattern exactly), and the same `SetDefaultOptions()` +
+   `NewGameInitData()` carry-over pattern Battle Speed uses (§6.1), since the
+   default (SwSh) is not the "untouched var reads 0" case.
+   `src/party_menu_dispatch.c` now branches on `GetPartyMenuStyle()` for the
+   58 genuinely-per-variant functions and always calls the HnS-classic
+   implementation for the 6 that are shared (§5.6.1).
 
 ### 5.4 Option storage for the party style
 
@@ -1242,6 +1258,24 @@ what was actually true once each item was traced against HnS's real source
   added an explicit `(bool8 (*)(void))` cast at the other 4 call sites,
   rather than changing the shared field-effect functions' real signatures.
 
+* **Wiring `party_menu_dispatch.c` for real two-way dispatch surfaced four
+  more members of the "genuinely shared, do not duplicate" class** beyond
+  `CanLearnTutorMove`/`GetTMHMMoves` above: `BattleMoveIdToItemId`, `IsMoveHm`,
+  `MoveToHM` (all three pure `sTMHMMoves`-table lookups, no UI) and
+  `ItemUseCB_Mints` (HnS's real, working Nature-Mint item-use handler — not
+  to be confused with Soulgold's differently-named, differently-implemented
+  `Task_Mint`/`ItemUseCB_Mint`, which genuinely doesn't exist in HnS and was
+  correctly deleted earlier) plus `ItemUseCB_PokeBall`. Confirmed by checking
+  which of the 64 dispatched names `swsh_party_menu.c` actually defines a
+  body for (it deliberately has none for these 6, since nothing internal to
+  that file calls them by name) before wiring live dispatch — wiring it
+  blind would have produced six more `undefined reference to
+  'SwShPartyMenu_...'` failures, this time only reachable once a player
+  actually selected the SwSh style and hit one of these paths, rather than
+  at every build. `party_menu_dispatch.c` now uses a separate
+  `SHARED_DISPATCH_RET`/`VOID` macro pair for these 6, forwarding
+  unconditionally to `HnsPartyMenu_...` regardless of `GetPartyMenuStyle()`.
+
 None of the above required inventing new game mechanics — every fix is
 either HnS's own real, existing code (read and matched exactly) or a
 straightforward deletion of a system HnS doesn't have, per §5.2. The dead
@@ -1277,7 +1311,7 @@ Soulgold's values, taken from `../soulgold/src/new_game.c`:
 | Overworld speed | 1x (`:232-233`) | `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)` | **Landed (Phase 1)** — needed no explicit default write at all; 0 already means 1x. |
 | Battle speed | **2x** (`:144`) | `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X)` | **Landed (Phase 2)** — see below, not where this section originally said. |
 | Dark UI | Light / off (`:143`) | (no write needed) | **Landed (Phase 3)** — like overworld speed, needed no explicit default write; 0 already means Light. |
-| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` | Planned (Phase 4) |
+| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` | **Landed (Phase 4)** |
 
 **Correction, found while landing Phase 2 (§3.8): "set all four in
 `NewGameInitData()`, alongside the existing `gSaveBlock2Ptr->options*`
