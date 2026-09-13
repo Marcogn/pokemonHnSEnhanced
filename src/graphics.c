@@ -1178,7 +1178,19 @@ const u32 gBagScreen_GfxTileMap[] = INCBIN_U32("graphics/bag/menu.bin.lz");
 
 // Soulgold's starfield background, shown on its own BG behind the bag's
 // foreground UI wherever that UI has transparent (palette index 0) pixels.
-const u32 gBagScrollingBg_Gfx[] = INCBIN_U32("graphics/bag/scrolling_bg.4bpp.lz");
+// Matches Soulgold exactly: BG3 shares its char base (and therefore its
+// tile graphics) with BG2. This can't reuse plain gBagScreen_Gfx above,
+// though: menu.bin uses tile 2 and tile 17 as full-screen flat-colour
+// fills (confirmed by dumping menu.bin - they cover almost the entire
+// visible grid), and that same graphic is also loaded by
+// battle_pyramid_bag.c with its own, different tilemap (menu_pyramid.bin)
+// that relies on those exact tiles being opaque. So this is a separate,
+// bag-menu-only copy (graphics/bag/menu_with_stars.png, 128x40 instead of
+// gBagScreen_Gfx's 128x32) with the 14 star tiles appended as a 5th
+// tileset row *and* tiles 2/17 blanked to transparent so the starfield
+// actually shows through - gBagScreen_Gfx itself, and the Pyramid Bag
+// screen that depends on it, are untouched.
+const u32 gBagScreenWithStars_Gfx[] = INCBIN_U32("graphics/bag/menu_with_stars.4bpp.lz");
 const u32 gBagScrollingBg_Tilemap[] = INCBIN_U32("graphics/bag/scrolling_bg.bin.lz");
 const u32 gBagScrollingBg_Pal[] = INCBIN_U32("graphics/bag/scrolling_bg.gbapal.lz");
 

@@ -913,35 +913,69 @@ starfield. Traced instead of guessed:
   tiles HnS's sheet doesn't have. All 1024 tilemap entries use Soulgold's
   own palette bank 0 (`menu_male.pal` indices 0–15), the same bank as the
   rest of the Bag chrome.
-* HnS's Bag never had a `.bg = 3` at all, so this could not be a
-  drop-in tilemap copy — porting it needed a new BG. Rather than merging 14
-  more tiles into HnS's existing (already dark-mode-corrected) foreground
-  tileset/tilemap and having to renumber a 1024-entry tilemap by hand, the
-  14 star tiles were extracted into their own standalone 16-tile sheet
-  (`graphics/bag/scrolling_bg.png`, tile IDs remapped 64–77 → 0–13) with
-  their own dedicated palette (`scrolling_bg.pal`, Soulgold's real bank-0
-  colours) and tilemap (`scrolling_bg.bin`, same remap applied, palette
-  nibble forced to a new dedicated bank). This is additive only: HnS's
-  existing foreground BG0/1/2 assets, tile numbering, and the Dark UI bag
-  palette fix in §4.7 are untouched.
-* New `.bg = 3` template added to `sBgTemplates_ItemMenu` with
-  `charBaseIndex = 2` and `mapBaseIndex = 28` — both verified unused
-  anywhere else in the Bag's own template array (HnS only used
-  charBaseIndex 0 and 3, mapBaseIndex 29–31) — and the new palette loads at
-  `BG_PLTT_ID(2)`, also verified free (the Bag's own code only ever touches
-  banks 0–1 for its chrome and 12–15 for shared menu/message windows).
-  `struct BagMenu` gained one more `u8[BG_SCREEN_SIZE]` tilemap buffer —
-  free, since `gBagMenu` is heap-allocated (`AllocZeroed`), not a static
-  `EWRAM_DATA` struct, so this does not touch the project's tight static
-  EWRAM budget (§1.2/§4.6) at all; confirmed by the unchanged EWRAM figure
-  in the verification build below.
+* **First attempt (wrong): a separate char base for the star tiles.** To
+  avoid touching HnS's existing (already dark-mode-corrected) foreground
+  tileset/tilemap, the 14 star tiles were first extracted into their own
+  standalone 16-tile sheet on an unused `charBaseIndex`/`BG_PLTT_ID` — a
+  cleaner-looking separation than Soulgold's own shared-char-base design.
+  This built fine and looked correct in every static check (palette bytes,
+  tile bytes and tilemap bytes were all verified correct in ROM and in
+  live VRAM via a headless mGBA harness with the user's own real save),
+  but the Bag screen still rendered no stars. Chased that for a long time
+  as a VRAM/decompression bug (tried `LZDecompressVram`, plain `CpuCopy16`,
+  raw `RequestDma3Copy`, different char blocks — all wrote the exact same
+  bytes) before realizing the "garbage" byte pattern being read back
+  (`0xAA` repeating) was never garbage at all: it's the correct, legitimate
+  flat-navy-sky fill color the star tiles mostly consist of. The data was
+  right the entire time; a separate char base was simply never the actual
+  problem.
+* **Real cause: `menu.bin` has zero transparent tiles in the visible
+  viewport.** Dumping HnS's own foreground tilemap (`graphics/bag/menu.bin`)
+  showed tile 0 (genuinely blank, all-index-0) is used 424 times — but
+  *only* outside the visible 30×20 tile viewport (the padding on a 32×32
+  screen block). Every one of the visible tiles is opaque; tile 2 (a subtle
+  two-tone stripe fill) and tile 17 (a flat fill) alone cover most of the
+  screen. Unlike Soulgold's own layout, HnS's Bag foreground was drawn with
+  no transparent gaps at all, so a correctly-loaded, correctly-enabled BG3
+  underneath it has nothing to show through — confirmed by manually
+  reading back the live palette (RGB, not just index) at those exact pixel
+  coordinates: it matched HnS's own light-grey chrome color exactly, not
+  black or garbage. There was no rendering bug to fix here, only a design
+  fact to work around.
+* **Fix: blank tiles 2 and 17, but in a Bag-menu-only copy of the
+  graphic.** `gBagScreen_Gfx` (`menu.4bpp`) is also loaded by
+  `battle_pyramid_bag.c` for the Battle Pyramid's own Bag screen, using its
+  own tilemap (`menu_pyramid.bin`) that relies on those same tiles 2/17
+  being opaque (confirmed: it uses tile 2 135 times and tile 17 240 times).
+  Blanking them in the shared asset would have broken that unrelated
+  screen. Instead, a new `graphics/bag/menu_with_stars.png` (128×40) was
+  created: a copy of `menu.png` with the 14 star tiles appended as tiles
+  64–77 (exactly as in the "first attempt" above, this part is unchanged)
+  *and* tiles 2/17 zeroed out. A new symbol, `gBagScreenWithStars_Gfx`,
+  replaces `gBagScreen_Gfx` only in `item_menu.c`'s own `LoadBagMenu_Graphics`;
+  `graphics.c`'s `gBagScreen_Gfx` and `battle_pyramid_bag.c` are untouched.
+* Matching Soulgold, `.bg = 3`'s template uses `charBaseIndex = 3` (shared
+  with `.bg = 2`, since the star tiles are now part of the same
+  `gBagScreenWithStars_Gfx` blob loaded for BG2) and `mapBaseIndex = 28`
+  (verified free — HnS's own BG0–2 use 29–31) with its own palette at
+  `BG_PLTT_ID(2)` (also verified free — the Bag's own code only ever
+  touches banks 0–1 for its chrome and 12–15 for shared menu/message
+  windows). Because the tile graphics are shared with BG2's own load, no
+  second `struct BagMenu` tilemap buffer or extra VRAM copy is needed for
+  them — only the (separate) tilemap and palette are loaded for BG3, both
+  directly into VRAM with `LZDecompressVram`/`LoadCompressedPalette`,
+  matching how HnS's own battle terrain backgrounds load static BGs
+  (`LoadBattleEnvironmentGfx` in `battle_bg.c`).
 * No dark-mode variant was created for the starfield, matching Soulgold: it
   never swaps this palette for Dark UI either (only the two chrome banks at
   `BG_PLTT_ID(0)` get a dark variant) — the sky is already dark enough to
   read fine under both Light and Dark UI.
-* Verified with `make modern`: 0 errors, 0 new warnings, EWRAM/IWRAM
-  unchanged from §4.7, ROM +728 bytes (new compressed tile/tilemap/palette
-  data only).
+* Verified with `make modern` (0 errors, 0 new warnings, EWRAM/IWRAM
+  unchanged from §4.7) *and*, this time, with an actual headless-emulator
+  screenshot against the user's own real save file (autoloaded via mGBA's
+  Python bindings), in both Light and Dark UI, confirming real navy-blue
+  stars render behind the item list rather than trusting the palette/VRAM
+  bytes alone.
 
 ---
 
