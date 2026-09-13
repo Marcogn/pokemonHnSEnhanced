@@ -188,6 +188,7 @@ void NewGameInitData(void)
     bool8 FasterJoy = FlagGet(FLAG_EVEN_FASTER_JOY);
     u16 OverworldSpeedPrev = VarGet(VAR_OVERWORLD_SPEEDUP);
     u16 BattleSpeedPrev = VarGet(VAR_BATTLE_SPEED);
+    u16 DarkUiPrev = VarGet(VAR_DARK_UI);
 
     if (BattleSpeedPrev >= OPTIONS_BATTLE_SPEED_COUNT)
         BattleSpeedPrev = OPTIONS_BATTLE_SPEED_2X;
@@ -260,6 +261,7 @@ void NewGameInitData(void)
     FasterJoy ? FlagSet(FLAG_EVEN_FASTER_JOY) : FlagClear(FLAG_EVEN_FASTER_JOY);
     VarSet(VAR_OVERWORLD_SPEEDUP, OverworldSpeedPrev);
     VarSet(VAR_BATTLE_SPEED, BattleSpeedPrev);
+    VarSet(VAR_DARK_UI, DarkUiPrev);
 
     gSaveBlock1Ptr->versionIdMagic = SAVE_MAGIC_NUM;
     gSaveBlock1Ptr->versionId = SAVE_VERSION;

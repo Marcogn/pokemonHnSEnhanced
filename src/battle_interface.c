@@ -2,6 +2,7 @@
 #include "malloc.h"
 #include "battle.h"
 #include "pokemon.h"
+#include "battle_bg.h"
 #include "battle_controllers.h"
 #include "battle_interface.h"
 #include "battle_setup.h"
@@ -660,18 +661,22 @@ static struct CompressedSpriteSheet GetStatusSummaryBarSpriteSheet(void)
 
 static struct SpritePalette GetStatusSummaryBarSpritePal(void)
 {
+    bool8 dark = IsDarkUiEnabled();
+
     if (gSaveBlock2Ptr->optionsNewBattleUI == 1)
-        return (struct SpritePalette){ gBattleInterface_BallStatusBarPalGen4, TAG_STATUS_SUMMARY_BAR_PAL };
+        return (struct SpritePalette){ dark ? gBattleInterface_BallStatusBarPalGen4_Dark : gBattleInterface_BallStatusBarPalGen4, TAG_STATUS_SUMMARY_BAR_PAL };
     else
-        return (struct SpritePalette){ gBattleInterface_BallStatusBarPalGen3, TAG_STATUS_SUMMARY_BAR_PAL };
+        return (struct SpritePalette){ dark ? gBattleInterface_BallStatusBarPalGen3_Dark : gBattleInterface_BallStatusBarPalGen3, TAG_STATUS_SUMMARY_BAR_PAL };
 }
 
 static struct SpritePalette GetStatusSummaryBallsSpritePal(void)
 {
+    bool8 dark = IsDarkUiEnabled();
+
     if (gSaveBlock2Ptr->optionsNewBattleUI == 1)
-        return (struct SpritePalette){ gBattleInterface_BallDisplayPalGen4, TAG_STATUS_SUMMARY_BALLS_PAL };
+        return (struct SpritePalette){ dark ? gBattleInterface_BallDisplayPalGen4_Dark : gBattleInterface_BallDisplayPalGen4, TAG_STATUS_SUMMARY_BALLS_PAL };
     else
-        return (struct SpritePalette){ gBattleInterface_BallDisplayPalGen3, TAG_STATUS_SUMMARY_BALLS_PAL };
+        return (struct SpritePalette){ dark ? gBattleInterface_BallDisplayPalGen3_Dark : gBattleInterface_BallDisplayPalGen3, TAG_STATUS_SUMMARY_BALLS_PAL };
 }
 
 static struct SpriteSheet GetStatusSummaryBallsSpriteSheet(void)

@@ -3639,6 +3639,7 @@ extern const u16 gBerryFixWindow_Pal[];
 extern const u32 gBattleTextboxTiles[];
 extern const u32 gBattleTextboxTilemap[];
 extern const u32 gBattleTextboxPalette[];
+extern const u32 gBattleTextboxPalette_Dark[];
 extern const u32 gVsLettersGfx[];
 extern const u32 gBattleVSFrame_Gfx[];
 extern const u32 gBattleVSFrame_Pal[];
@@ -4518,7 +4519,9 @@ extern const u8 gMenuInfoElements_Gfx[];
 extern const u32 gBagScreen_Gfx[];
 extern const u32 gBagScreen_GfxTileMap[];
 extern const u32 gBagScreenFemale_Pal[];
+extern const u32 gBagScreenFemale_Pal_Dark[];
 extern const u32 gBagScreenMale_Pal[];
+extern const u32 gBagScreenMale_Pal_Dark[];
 extern const u8 gBagMenuHMIcon_Gfx[];
 
 // item menu icons graphics
@@ -4716,9 +4719,13 @@ extern const u8 gBattleInterface_BallDisplayGfxGen4[];
 extern const u32 gBattleInterface_BallStatusBarGfxGen3[];
 extern const u8 gBattleInterface_BallDisplayGfxGen3[];
 extern const u16 gBattleInterface_BallStatusBarPalGen4[];
+extern const u16 gBattleInterface_BallStatusBarPalGen4_Dark[];
 extern const u16 gBattleInterface_BallDisplayPalGen4[];
+extern const u16 gBattleInterface_BallDisplayPalGen4_Dark[];
 extern const u16 gBattleInterface_BallStatusBarPalGen3[];
+extern const u16 gBattleInterface_BallStatusBarPalGen3_Dark[];
 extern const u16 gBattleInterface_BallDisplayPalGen3[];
+extern const u16 gBattleInterface_BallDisplayPalGen3_Dark[];
 extern const u8 gHealthboxElementsGfxTableGen4[][32];
 extern const u8 gHealthboxElementsGfxTableGen3[][32];
 extern const u8 ALIGNED(4) gNuzlockeFirstEncounterIndicatorGfx[];
@@ -4765,9 +4772,13 @@ extern const u32 gHealthboxDoublesOpponentGfxGen3[];
 extern const u32 gHealthboxSafariGfxGen3[];
 extern const u32 gBlankGfxCompressed[];
 extern const u16 gBattleInterface_BallStatusBarPalGen4[];
+extern const u16 gBattleInterface_BallStatusBarPalGen4_Dark[];
 extern const u16 gBattleInterface_BallDisplayPalGen4[];
+extern const u16 gBattleInterface_BallDisplayPalGen4_Dark[];
 extern const u16 gBattleInterface_BallStatusBarPalGen3[];
+extern const u16 gBattleInterface_BallStatusBarPalGen3_Dark[];
 extern const u16 gBattleInterface_BallDisplayPalGen3[];
+extern const u16 gBattleInterface_BallDisplayPalGen3_Dark[];
 
 extern const u32 gSwapLineGfx[];
 extern const u32 gSwapLinePal[];
@@ -4811,6 +4822,7 @@ extern const u32 gBattleArenaJudgmentSymbolsGfx[];
 extern const u32 gBattleArenaJudgmentSymbolsPalette[];
 
 extern const u32 gBattleWindowTextPalette[];
+extern const u32 gBattleWindowTextPalette_Dark[];
 
 extern const u32 gContest2Pal[];
 
