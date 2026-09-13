@@ -125,6 +125,7 @@ static void SetDefaultOptions(void)
     gSaveBlock2Ptr->optionsRunType = 1;
     gSaveBlock2Ptr->optionsNewBattleUI= 0;
     gSaveBlock2Ptr->optionsGenOneRecharge= 0;
+    VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X); //HnS
 }
 
 static void ClearPokedexFlags(void)
@@ -186,6 +187,10 @@ void NewGameInitData(void)
     bool8 EnableExtraLegendaries = FlagGet(FLAG_EXTRA_LEGENDARIES);
     bool8 FasterJoy = FlagGet(FLAG_EVEN_FASTER_JOY);
     u16 OverworldSpeedPrev = VarGet(VAR_OVERWORLD_SPEEDUP);
+    u16 BattleSpeedPrev = VarGet(VAR_BATTLE_SPEED);
+
+    if (BattleSpeedPrev >= OPTIONS_BATTLE_SPEED_COUNT)
+        BattleSpeedPrev = OPTIONS_BATTLE_SPEED_2X;
 
     if (gSaveFileStatus == SAVE_STATUS_EMPTY || gSaveFileStatus == SAVE_STATUS_CORRUPT)
         RtcReset();
@@ -254,6 +259,7 @@ void NewGameInitData(void)
     EnableExtraLegendaries ? FlagSet(FLAG_EXTRA_LEGENDARIES) : FlagClear(FLAG_EXTRA_LEGENDARIES);
     FasterJoy ? FlagSet(FLAG_EVEN_FASTER_JOY) : FlagClear(FLAG_EVEN_FASTER_JOY);
     VarSet(VAR_OVERWORLD_SPEEDUP, OverworldSpeedPrev);
+    VarSet(VAR_BATTLE_SPEED, BattleSpeedPrev);
 
     gSaveBlock1Ptr->versionIdMagic = SAVE_MAGIC_NUM;
     gSaveBlock1Ptr->versionId = SAVE_VERSION;

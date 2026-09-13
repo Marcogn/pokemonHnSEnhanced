@@ -77,6 +77,8 @@ static void CB2_HandleStartBattle(void);
 static void TryCorrectShedinjaLanguage(struct Pokemon *mon);
 static u8 CreateNPCTrainerParty(struct Pokemon *party, u16 trainerNum, bool8 firstTrainer);
 static void BattleMainCB1(void);
+static void RunBattleSoftwareTick(void);
+static bool32 CanRunExtraBattleTick(void);
 static void CB2_EndLinkBattle(void);
 static void EndLinkBattleInSteps(void);
 static void CB2_InitAskRecordBattle(void);
@@ -2248,13 +2250,117 @@ static void CB2_HandleStartMultiBattle(void)
     }
 }
 
-void BattleMainCB2(void)
+bool32 InBattleChoosingMoves(void)
+{
+    return gBattleMainFunc == HandleTurnActionSelectionState;
+}
+
+// Runs one logical frame's worth of the battle's non-hardware-facing state.
+// This is exactly the five calls BattleMainCB2 always made; extracted so the
+// battle speed-up (GetBattleSpeedScale/CanRunExtraBattleTick below) can run
+// it more than once per real VBlank.
+static void RunBattleSoftwareTick(void)
 {
     AnimateSprites();
     BuildOamBuffer();
     RunTextPrinters();
     UpdatePaletteFade();
     RunTasks();
+}
+
+// Whether it is safe right now to run an extra logical tick beyond the one
+// every real VBlank already gets. Re-checked before every extra tick, not
+// just once, because a tick can change any of this state (start a fade, end
+// the battle, complete a catch) partway through the loop.
+static bool32 CanRunExtraBattleTick(void)
+{
+    // Link battles are paced by real frames on both ends; do not accelerate.
+    if (gBattleTypeFlags & BATTLE_TYPE_LINK)
+        return FALSE;
+
+    if (!gMain.inBattle
+     || gMain.callback1 != BattleMainCB1
+     || gMain.callback2 != BattleMainCB2)
+        return FALSE;
+
+    // Move/action selection always runs at 1x - see GetBattleSpeedScale().
+    if (InBattleChoosingMoves())
+        return FALSE;
+
+    // A palette fade needs a hardware transfer between updates; running
+    // extra ticks during one visibly skips fade steps.
+    if (gPaletteFade.active || IsPaletteFadeTransferPending())
+        return FALSE;
+
+    // The capture animation samples sprite state once per real frame and
+    // aliases badly when accelerated. HnS has no per-animation "capture in
+    // progress" flag (Soulgold's BattleAnimationInfo.captureSuccessAnimActive
+    // has no HnS equivalent - its bitfields are unnamed here), so this gates
+    // on the whole battle once any catch has happened, which is coarser than
+    // Soulgold but harmless: a successful catch ends the encounter except in
+    // the rare double battle where the other Pokemon is still fought.
+    if (gBattleResults.caughtMonSpecies)
+        return FALSE;
+
+    return TRUE;
+}
+
+// How many logical battle ticks to run for this real VBlank. 1 = no speed-up.
+u32 GetBattleSpeedScale(void)
+{
+    // Hold L to force 1x.
+    if (JOY_HELD(L_BUTTON))
+        return 1;
+
+    // Move selection must stay at normal speed or the menu becomes unusable.
+    if (InBattleChoosingMoves())
+        return 1;
+
+    switch (VarGet(VAR_BATTLE_SPEED))
+    {
+    case OPTIONS_BATTLE_SPEED_2X: return 2;
+    case OPTIONS_BATTLE_SPEED_3X: return 3;
+    case OPTIONS_BATTLE_SPEED_1X:
+    default:
+        return 1;
+    }
+}
+
+void BattleMainCB2(void)
+{
+    u32 speedScale = GetBattleSpeedScale();
+    u32 tick;
+
+    if (!CanRunExtraBattleTick())
+        speedScale = 1;
+
+    // callback1 has already run once in CallCallbacks. Each pass here
+    // completes that logical tick using the original update order; only the
+    // real VBlank interrupt uploads the final state to hardware, so extra
+    // ticks are invisible except through the state they advance.
+    for (tick = 0; tick < speedScale; tick++)
+    {
+        RunBattleSoftwareTick();
+
+        // A task can leave the battle or replace either callback. Do not
+        // touch battle-owned state after that transition.
+        if (!gMain.inBattle
+         || gMain.callback1 != BattleMainCB1
+         || gMain.callback2 != BattleMainCB2)
+            return;
+
+        if (tick + 1 >= speedScale || !CanRunExtraBattleTick())
+            break;
+
+        // Start the next logical tick. Call BattleMainCB1 explicitly so a
+        // task cannot make us invoke an unrelated callback from here.
+        BattleMainCB1();
+
+        if (!gMain.inBattle
+         || gMain.callback1 != BattleMainCB1
+         || gMain.callback2 != BattleMainCB2)
+            return;
+    }
 
     if (JOY_HELD(B_BUTTON) && gBattleTypeFlags & BATTLE_TYPE_RECORDED && RecordedBattle_CanStopPlayback())
     {

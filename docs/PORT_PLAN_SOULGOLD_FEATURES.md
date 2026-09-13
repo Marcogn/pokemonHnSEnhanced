@@ -99,10 +99,25 @@ check on the PR.
   Vars live in `SaveBlock1`, are already allocated, and default to 0 in old
   saves — which maps cleanly to "1x / off". This is also what SG does
   (`VAR_OVERWORLD_SPEEDUP`, `VAR_BATTLE_SPEED`).
-  Free vars confirmed in `include/constants/vars.h`: `0x40A1`, `0x40A8`,
-  `0x40B8`, `0x40BB`, `0x40DB`, `0x40DC`, `0x40FB`, `0x40FC`, plus
-  `VAR_UNUSED_HNS_VAR4..7` (`0x409C`–`0x409F`).
-  Free flags confirmed in `include/constants/flags.h` (`FLAG_UNUSED_0x94F`+).
+  **Correction (found during Phase 2, see §3.8 and §7 rule 11): the list this
+  paragraph originally gave here was not actually checked against real usage,
+  and most of it was wrong.** Systematically grepping every `VAR_UNUSED_0x*`
+  and `VAR_UNUSED_HNS_VAR*` name in `include/constants/vars.h` for real
+  references (symbol name and raw hex value) across `src/`, `data/` and
+  `asm/` found that `0x40DB`, `0x40DC`, `0x40FB`, `0x8014`, and all four of
+  `VAR_UNUSED_HNS_VAR4..7` (`0x409C`–`0x409F`) are live — mostly mirrored into
+  scripts via `VarSet`/`VarGet` (e.g. `CheckNuzlockeMode()`,
+  `src/script.c:561-577`) despite the "Unused" name and comment. **The
+  genuinely free vars, re-verified this way, are only: `0x40A1`, `0x40A8`,
+  `0x40B8`, `0x40FC`**, plus `0x40BB` (consumed by Phase 1 as
+  `VAR_OVERWORLD_SPEEDUP`) and `0x40FC` (consumed by Phase 2 as
+  `VAR_BATTLE_SPEED`). Two remain for Phases 3–4: `0x40A1`, `0x40A8`, `0x40B8`.
+  **Re-run this same check before picking one** — this list is a starting
+  point from one pass, not a guarantee; do not trust it either without
+  re-verifying, for exactly the reason this correction exists.
+  Free flags confirmed in `include/constants/flags.h`
+  (`FLAG_UNUSED_0x94F`+) — not yet re-verified the same way; do so before
+  relying on any specific one.
 * The one option that genuinely cannot be a var is the party-menu style if you
   want it readable before `SaveBlock1` is loaded — see §5.4 for SG's
   magic-byte pattern (`PARTY_MENU_OPTION_SAVE_MAGIC`,
@@ -191,7 +206,7 @@ Re-measure after each phase lands and update the table below.
 |---|---|---|---|
 | Baseline (`main`) | 261168 B (99.63%) | 976 B | 22505416 B (67.07%) |
 | 1 — overworld speed | 261168 B (99.63%, unchanged) | 976 B | 22505896 B (67.07%, +480 B) |
-| 2 — battle speed | _pending_ | | |
+| 2 — battle speed | 261168 B (99.63%, unchanged) | 976 B | 22506852 B (67.08%, +956 B from Phase 1) |
 | 3 — dark/light UI | _pending_ | | |
 | 4 — party menu | _pending_ | | |
 
@@ -331,50 +346,69 @@ invasive and far easier to keep correct. Reference:
 
 ### 3.2 What HnS is missing and how to supply it
 
+(**Table below is as originally planned; §3.8 has what actually landed after
+verifying each row against the real HnS source — several rows turned out
+wrong or unnecessary. Read §3.8, not just this table.**)
+
 | SG symbol | HnS status | Action |
 |---|---|---|
-| `InBattleChoosingMoves()` | absent | add to `src/battle_main.c`, `return gBattleMainFunc == HandleTurnActionSelectionState;` — that static exists in HnS |
-| `InBattleRunningActions()` | absent | same pattern with `RunTurnActionsFunctions` |
-| `IsPaletteFadeTransferPending()` | absent | HnS `src/palette.c` has no `sPlttBufferTransferPending`. Add the flag + accessor, mirroring SG `src/palette.c:95-107`. **Verify HnS's `UpdatePaletteFade` sets `gPaletteFade.multipurpose1` the same way before copying this.** If it does not, gate extra ticks on `gPaletteFade.active` alone and note the reduced safety in a comment. |
-| `AdvanceRandom()` | absent | HnS uses the vanilla LCG `Random()` (`src/main.c:363`, `src/battle_main.c:2736`). Do **not** port SG's SFC32 RNG. Instead, see §3.4. |
-| `gTestRunnerEnabled` | absent | drop the condition entirely; HnS has no test runner |
-| `gBattleStruct->hasBattleInputStarted` | absent | add a `u8 hasBattleInputStarted:1;` to `struct BattleStruct` in `include/battle.h` |
-| `gBattleSpritesDataPtr->animationData->captureSuccessAnimActive` | **verify** | HnS has `struct BattleAnimationInfo` at `include/battle.h:543` with `ballThrowCaseId` at `:552`, but the field name may differ. Grep before using; if the field is absent, gate on `gBattleResults.caughtMonSpecies` only. |
+| `InBattleChoosingMoves()` | absent | add to `src/battle_main.c`, `return gBattleMainFunc == HandleTurnActionSelectionState;` — that static exists in HnS. **Landed as planned.** |
+| `InBattleRunningActions()` | absent | same pattern with `RunTurnActionsFunctions`. **Not landed — turned out unneeded once the `OPTIONS_BATTLE_SCENE_DISABLED` branch (its only caller) was dropped. See §3.8.** |
+| `IsPaletteFadeTransferPending()` | absent | HnS `src/palette.c` has no `sPlttBufferTransferPending`. Add the flag + accessor, mirroring SG `src/palette.c:95-107`. **Wrong — HnS already has this exact flag and mechanism, just no public accessor. Only the 4-line wrapper was added. See §3.8.** |
+| `AdvanceRandom()` | absent | HnS uses the vanilla LCG `Random()` (`src/main.c:363`, `src/battle_main.c:2736`). Do **not** port SG's SFC32 RNG. Instead, see §3.4. **Landed as planned (i.e. not touched at all).** |
+| `gTestRunnerEnabled` | absent | drop the condition entirely; HnS has no test runner. **Landed as planned.** |
+| `gBattleStruct->hasBattleInputStarted` | absent | add a `u8 hasBattleInputStarted:1;` to `struct BattleStruct` in `include/battle.h`. **Not landed — see §3.8, same reason as `InBattleRunningActions()` above.** |
+| `gBattleSpritesDataPtr->animationData->captureSuccessAnimActive` | **verify** | HnS has `struct BattleAnimationInfo` at `include/battle.h:543` with `ballThrowCaseId` at `:552`, but the field name may differ. Grep before using; if the field is absent, gate on `gBattleResults.caughtMonSpecies` only. **Confirmed absent; landed on the `caughtMonSpecies` fallback exactly as this row anticipated. See §3.8 for the accepted coarseness.** |
 | `BtlController_Complete`, `enum BattlerId` signatures | different | not needed — the speed-up touches only `BattleMainCB2`, not the controllers |
 
 ### 3.3 Steps
 
-1. `include/constants/vars.h`: rename `VAR_UNUSED_0x40DC` → `VAR_BATTLE_SPEED`
-   (SG uses the same address, `include/constants/vars.h:240` — convenient but
-   coincidental).
-2. `include/constants/global.h`: add `OPTIONS_BATTLE_SCENE_1X..4X`,
-   `_DISABLED`, `_COUNT` from SG `include/constants/global.h:211-216`.
-   HnS keeps its own separate `optionsBattleSceneOff` bit — the two are
-   independent; leave `optionsBattleSceneOff` alone.
-3. `include/battle.h`: add `hasBattleInputStarted` to `struct BattleStruct`.
-   Append it to an existing bitfield run so the struct does not grow; `BattleStruct`
-   is heap-allocated, not saved, so layout changes are safe here.
+1. ~~`include/constants/vars.h`: rename `VAR_UNUSED_0x40DC` → `VAR_BATTLE_SPEED`~~
+   **Corrected — do not use `0x40DC`, it is not actually free.** See §3.8 and
+   §7 rule 11: it is live (`CheckNuzlockeMode()`, `src/script.c:569,571`, and
+   a debug script). Use `VAR_UNUSED_0x40FC` → `VAR_BATTLE_SPEED` instead
+   (verified genuinely unreferenced). SG's own address (`:240` in its
+   `vars.h`) was always coincidental, not load-bearing, so this substitution
+   changes nothing else.
+2. `include/constants/global.h`: add battle-speed constants. **Corrected
+   naming** (see §3.8): not `OPTIONS_BATTLE_SCENE_*` verbatim from SG — that
+   name collides in meaning with HnS's own pre-existing, unrelated
+   `optionsBattleSceneOff` bit (whether animations play at all, vs. this
+   option's "how fast do they play"). Landed as `OPTIONS_BATTLE_SPEED_1X/2X/3X`
+   and `_COUNT`, no `_DISABLED` value (dropped per step 5 below, which turned
+   out to make step 3 below unnecessary too). `optionsBattleSceneOff` is
+   untouched either way.
+3. ~~`include/battle.h`: add `hasBattleInputStarted` to `struct BattleStruct`~~.
+   **Not needed — see §3.8.** Its only purpose in SG is gating the
+   `OPTIONS_BATTLE_SCENE_DISABLED` branch this step's own next bullet already
+   says may be dropped; drop that branch fully and the flag has no reader left.
 4. `src/battle_main.c`:
-   * add `InBattleChoosingMoves()` / `InBattleRunningActions()` and declare them
-     in `include/battle_main.h`;
+   * add `InBattleChoosingMoves()` ~~/ `InBattleRunningActions()`~~ (the
+     second is not needed either, for the same reason as step 3 — its only
+     caller was inside the dropped branch) and declare it in
+     `include/battle_main.h`;
    * add `static void RunBattleSoftwareTick(void)` containing exactly the five
      calls currently inlined in `BattleMainCB2` (`src/battle_main.c:2253-2257`);
    * add `static bool32 CanRunExtraBattleTick(void)` adapted per §3.2;
    * rewrite `BattleMainCB2()` (`src/battle_main.c:2251`) to the SG loop shape.
      **Preserve HnS's recorded-battle B-button block at the end unchanged**
      (`src/battle_main.c:2259-2266`).
-5. Add `GetBattleSpeedScale(bool32 forHealthbar)` — put it in `src/battle_main.c`
-   rather than `src/battle_controllers.c` to keep the change in one file;
-   declare in `include/battle_main.h`. Adapt from SG
-   `src/battle_controllers.c:3028`:
+5. Add `GetBattleSpeedScale(void)` — **no `forHealthbar` parameter** (see
+   §3.8: SG's own `Rogue_GetBattleSpeedScale(bool32 forHealthbar)` is called
+   from exactly one site, always with `FALSE`; the parameter is dead weight
+   in SG itself). Put it in `src/battle_main.c` rather than
+   `src/battle_controllers.c` to keep the change in one file; declare in
+   `include/battle_main.h`. Adapt from SG `src/battle_controllers.c:3028`:
    * `VarGet(VAR_BATTLE_SPEED)` instead of `VarGet(B_BATTLE_SPEED)` (HnS has no
      `include/config/battle.h`);
    * `JOY_HELD(L_BUTTON)` → return 1 (this is SG's behaviour already, and `L`
      alone is free in HnS battles — see §0.5);
    * keep the `InBattleChoosingMoves()` → 1x rule: move selection must stay at
      normal speed or the menu becomes unusable;
-   * you may drop the `OPTIONS_BATTLE_SCENE_DISABLED` branch since HnS keeps
-     "battle scene off" as a separate option.
+   * drop the `OPTIONS_BATTLE_SCENE_DISABLED` branch entirely (not just
+     "may" — see step 3 above for why dropping it fully removes the need for
+     `hasBattleInputStarted` and `InBattleRunningActions()` too) since HnS
+     keeps "battle scene off" as a separate option.
 6. **Do not** touch `src/main.c`'s VBlank RNG or `VBlankCB_Battle`
    (`src/battle_main.c:2733`) in the first cut — see §3.4.
 
@@ -423,11 +457,17 @@ user-visible defect, just a consequence of the frame model.
 ### 3.6 Option entry
 
 Same recipe as §2.4, but on the `MENU_CUSTOM` (battle) page:
-`MENUITEM_BATTLE_SPEED`, `sItemFunctionsCustom`, `sel_battle[]`,
-`ProcessInput_Options_Four` (expose 1x/2x/3x + Off-equivalent, or add a
-three-option helper — SG exposes only 1x/2x/3x, `src/option_menu.c:1478-1530`).
-Default in `src/new_game.c`: **2x**, matching SG — see §6.1, and read §6.2 on
-why existing saves are deliberately left at 1x.
+`MENUITEM_BATTLE_SPEED`, `sItemFunctionsCustom`, `sel_battle[]`. **Landed as a
+genuine 3-choice option** (1x/2x/3x, no "Off" — that already exists as the
+independent `optionsBattleSceneOff`) using the already-existing
+`ProcessInput_Options_Three` / a `DrawChoices_Options_Three`-style 3-label
+draw function (mirroring `DrawChoices_ButtonMode`'s pattern exactly), not
+`ProcessInput_Options_Four` with a 4th slot — matching SG's own real exposed
+range of 1x/2x/3x (`src/option_menu.c:1478-1530`) with no invented "Off"
+value that would have duplicated `optionsBattleSceneOff`'s meaning.
+Default in `src/new_game.c`: **2x**, matching SG — see §6.1, and read §6.2 and
+§3.8 (the last paragraph) on why existing saves are deliberately left at 1x
+and exactly where the 2x default and its carry-over live.
 
 ### 3.7 Acceptance
 
@@ -440,6 +480,85 @@ why existing saves are deliberately left at 1x.
 * Wild capture sequence, Mega/form-change scenes, evolution-after-battle and
   the level-up/learn-move flow all complete without visual corruption at 3x.
 * A link battle (if testable) still runs at 1x and does not desync.
+
+### 3.8 Implementation notes — landed, real deviations from §3.2/§3.3 above
+
+Verified with a real `make modern` build (§0.3): 0 errors, 0 warnings in any
+touched file, EWRAM/IWRAM unchanged from the Phase 1 row in §1.2's table, ROM
++956 bytes. Several things §3.2/§3.3 said to add or verify turned out, on
+inspection of the actual HnS source, to be either already present or
+unnecessary once a design choice above (§3.4's decision) was followed through
+completely. Recorded here so the reasoning survives, not just the diff:
+
+* **`VAR_UNUSED_0x40DC` was not free — do not use it.** Despite its name and
+  the "Unused Var" comment in `vars.h`, it is read and written by
+  `CheckNuzlockeMode()` (`src/script.c:569,571`) to mirror
+  `gSaveBlock1Ptr->tx_Challenges_Nuzlocke` for scripts, and read directly by
+  `data/scripts/debug.inc:80`. Reusing it would have silently broken the
+  Nuzlocke-challenge debug display. This was caught by checking every
+  `VAR_UNUSED_0x40xx` candidate's actual usage across `src/`, `data/` and
+  `asm/` before picking one — the same check the Phase 1 var (`0x40BB`) had
+  already passed, but §3.3's suggested `0x40DC` had not been re-checked
+  against this specific codebase. **`VAR_BATTLE_SPEED` uses `0x40FC`
+  instead** (confirmed genuinely unreferenced anywhere, including as a raw
+  hex literal). Three other vars in that range turned out to be live for the
+  same reason (`0x40DB`, `0x40FB`) — treat every "Unused" comment in this
+  file as a claim to verify, not a fact, in any later phase too.
+* **`hasBattleInputStarted` (§3.2, §3.3 step 3) was not added.** Its only
+  purpose in Soulgold is to distinguish "before" from "after" the first move
+  selection for the `OPTIONS_BATTLE_SCENE_DISABLED` branch of
+  `Rogue_GetBattleSpeedScale` — and §3.3 step 5 already said that branch could
+  be dropped, since HnS keeps "battle scene off" as its own independent
+  option. Once that branch is gone, nothing reads the flag: `GetBattleSpeedScale`
+  can call `InBattleChoosingMoves()` directly with no "has selection started"
+  gate needed. Adding the field anyway would have been dead weight on
+  `BattleStruct` for no behavioural difference.
+* **`InBattleRunningActions()` was not added**, for the same reason — its only
+  caller in Soulgold was inside the same dropped branch.
+* **`GetBattleSpeedScale` takes no `forHealthbar` parameter.** Soulgold's
+  `Rogue_GetBattleSpeedScale(bool32 forHealthbar)` is called from exactly one
+  site in Soulgold itself, always with `FALSE` — the `TRUE` path is dead code
+  in Soulgold too. Porting the parameter would have copied Soulgold's own
+  leftover complexity for no reason; HnS's version takes no parameter.
+* **`IsPaletteFadeTransferPending()` did not need a new backing flag.** §3.2
+  said "HnS `src/palette.c` has no `sPlttBufferTransferPending`" — that was
+  wrong. HnS's `palette.c` already has the identical mechanism
+  (`sPlttBufferTransferPending`, set in `UpdatePaletteFade()` from
+  `gPaletteFade.multipurpose1`, cleared in `TransferPlttBuffer()`), just
+  without a public accessor. Only the four-line wrapper function was needed.
+  Had this not been checked, the port would have added a second, competing
+  static of the same name and purpose.
+* **The capture-animation gate uses `gBattleResults.caughtMonSpecies` only**,
+  per §3.2's own documented fallback: HnS's `struct BattleAnimationInfo`
+  (`include/battle.h:543`) has no field resembling Soulgold's
+  `captureSuccessAnimActive` — its per-animation bits are unnamed
+  (`field_9_x1C` etc.). This gate is coarser than Soulgold's (it stays tripped
+  for the rest of the battle after any catch, not just during the catch
+  animation itself), which matters only in the rare case of a double wild
+  battle continuing after one Pokémon is caught — accepted as-is per §3.2.
+* **Battle speed's default (2x) is not set the same way Phase 1's overworld
+  option's default (1x) is.** Overworld speed needed nothing beyond the
+  carry-over in `NewGameInitData()`, because 1x is what an untouched var
+  already reads as (0). Battle speed's desired first-ever default is 2x
+  (value 1), which is not what 0 means, so it needs an explicit one-time
+  write. Tracing where Soulgold itself does this (`src/new_game.c:144`, its
+  `SetDefaultOptions()`-equivalent — *not* `NewGameInitData()`, confirmed by
+  reading both functions) showed the same split HnS already has: HnS's own
+  `SetDefaultOptions()` runs exactly once, only when the save is empty or
+  corrupt (`src/intro.c:903-904`), and its `gSaveBlock2Ptr->options... =`
+  writes there persist across every later "New Game" on that same file,
+  because `NewGameInitData()` never wipes `SaveBlock2` — only `SaveBlock1`
+  (where the vars live). So `VAR_BATTLE_SPEED = 2x` is set once in
+  `SetDefaultOptions()`, and `NewGameInitData()` carries it across the
+  `InitEventData()` reset exactly like Phase 1's overworld speed (snapshot
+  before, clamp, restore after) — without that carry-over, the one-time
+  default would be wiped by the very first "New Game" that follows it. This
+  matches Soulgold's real, verified behaviour (its own `NewGameInitData` does
+  the identical snapshot/restore for `VAR_BATTLE_SPEED`) and reproduces the
+  asymmetry §6.2 calls for: a save from before this option existed reads 0
+  (1x) forever unless the player changes it; any save that ever went through
+  `SetDefaultOptions()` gets 2x initially and keeps whatever it's set to
+  across subsequent New Games on that file.
 
 ---
 
@@ -849,22 +968,46 @@ statics and struct members — filter by hand.)
 
 Soulgold's values, taken from `../soulgold/src/new_game.c`:
 
-| Option | SG new-game default | HnS setting |
-|---|---|---|
-| Overworld speed | 1x (`:232-233`) | `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)` |
-| Battle speed | **2x** (`:144`) | `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SCENE_2X)` |
-| Dark UI | Light / off (`:143`) | `VarSet(VAR_DARK_UI, 0)` |
-| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` |
+| Option | SG new-game default | HnS setting | Status |
+|---|---|---|---|
+| Overworld speed | 1x (`:232-233`) | `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)` | **Landed (Phase 1)** — needed no explicit default write at all; 0 already means 1x. |
+| Battle speed | **2x** (`:144`) | `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X)` | **Landed (Phase 2)** — see below, not where this section originally said. |
+| Dark UI | Light / off (`:143`) | `VarSet(VAR_DARK_UI, 0)` | Planned (Phase 3) |
+| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` | Planned (Phase 4) |
 
-Set all four in `NewGameInitData()` in `src/new_game.c`, alongside the existing
-`gSaveBlock2Ptr->options*` initialisers.
+**Correction, found while landing Phase 2 (§3.8): "set all four in
+`NewGameInitData()`, alongside the existing `gSaveBlock2Ptr->options*`
+initialisers" was wrong for how HnS is actually structured.** Those
+`gSaveBlock2Ptr->options* =` lines live in a *separate* function,
+`SetDefaultOptions()`, which runs exactly once — only when the save file is
+empty or corrupt (`src/intro.c:903-904`) — not on every "New Game". A default
+that must survive being written before the player's first real "New Game"
+(as 2x must, since `NewGameInitData()`'s `InitEventData()` zeroes every
+`SaveBlock1` var on every run, including a first-ever one) needs **both**
+pieces, exactly mirroring SG's own real split (verified: SG's line 144 is in
+its `SetDefaultOptions()`-equivalent, not its `NewGameInitData()`):
 
-**Also port SG's option carry-over.** SG snapshots the player's current option
-values into a `struct NewGameOptions` before wiping the save and restores them
-afterwards (`../soulgold/src/new_game.c:220-232` and `:305-310`), so starting a
-New Game does not silently reset the player's preferences. Do the same for the
-four new options — it is ~15 lines and it is the behaviour the author asked to
-match.
+1. The one-time default write goes in HnS's `SetDefaultOptions()`
+   (`src/new_game.c`), alongside its existing `gSaveBlock2Ptr->options... =`
+   lines, in the same style (a bare `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X); //HnS`).
+2. `NewGameInitData()` then needs the carry-over below regardless, or that
+   one-time write is destroyed by the very first "New Game" that follows it.
+
+An option whose "default" is 0 anyway (overworld speed's 1x) needs only the
+carry-over, since an untouched var already reads 0 with no explicit write —
+this is why Phase 1 has no `SetDefaultOptions()` line at all. Check which
+case each of Phase 3/4's options falls into before assuming either pattern.
+
+**Port SG's option carry-over regardless of which case applies.** SG
+snapshots the player's current option value(s) before wiping the save (into
+a `struct NewGameOptions` for several at once, or standalone locals — either
+works) and restores them after, so starting a New Game does not silently
+reset the player's preferences. HnS's `NewGameInitData()` already does
+exactly this for a handful of `FlagGet`/`FlagSet` pairs
+(`FLAG_DIFFICULTY_HARD` and similar, near the top and bottom of the
+function) — Phases 1 and 2 both extended that same existing local-variable
+idiom for their vars rather than introducing SG's separate struct, and later
+phases should do the same for consistency with the surrounding code.
 
 ### 6.2 Existing saves
 
@@ -924,13 +1067,14 @@ reload and confirm it persisted.
 9. **No new top-level `static EWRAM_DATA` (or non-`static` `EWRAM_DATA`)
    anywhere in Phases 1–3 without checking §1.2's table first.** The baseline
    has 976 bytes of free EWRAM (§1.2) — that is not a rounding margin, it is
-   close to nothing. Phases 1–3 are designed in this plan to need none (Phase
-   2's `hasBattleInputStarted` bit goes on the already heap-allocated
-   `BattleStruct`; Phase 3's new data is `const` ROM palettes). If an
-   implementation step seems to need a new static EWRAM byte anywhere in those
-   three phases, that is a signal to stop and re-read this rule, not to add it
-   and move on. Phase 4 (the one phase that does need EWRAM) has its own
-   mandatory mitigation in §5.5 — read it before writing `swsh_party_menu.c`.
+   close to nothing. Phases 1–3 are designed in this plan to need none, and
+   Phase 2 landed with EWRAM exactly unchanged (§3.8: no bitfield was even
+   added to `BattleStruct` in the end — see §3.8 for why); Phase 3's new data
+   is `const` ROM palettes. If an implementation step seems to need a new
+   static EWRAM byte anywhere in those three phases, that is a signal to stop
+   and re-read this rule, not to add it and move on. Phase 4 (the one phase
+   that does need EWRAM) has its own mandatory mitigation in §5.5 — read it
+   before writing `swsh_party_menu.c`.
 10. **If you build locally (§0.3), `git status` before committing — a local
     build regenerates `include/constants/map_groups.h` from `data/maps/*.json`
     via the `mapjson` tool, and the regenerated version can drift from what is
@@ -940,6 +1084,17 @@ reload and confirm it persisted.
     feature in this plan. `git checkout -- include/constants/map_groups.h`
     before every commit that follows a local build, unless you specifically
     intended to update it (you did not, in any phase this plan describes).
+11. **A `VAR_UNUSED_0x*` / `FLAG_UNUSED_0x*` name and comment is a claim, not a
+    fact — verify every one before reusing it, every time, even ones this plan
+    already names as free.** Phase 2 found that `VAR_UNUSED_0x40DC`, this
+    plan's own suggested address for `VAR_BATTLE_SPEED` (§3.3 step 1), is
+    actually read and written by `CheckNuzlockeMode()`
+    (`src/script.c:569,571`) and read directly by a debug script
+    (`data/scripts/debug.inc:80`) — reusing it would have silently broken
+    that. §3.8 has the corrected address and the check that catches this:
+    `grep` every candidate for real usage across `src/`, `data/` and `asm/`
+    (symbol name *and* raw hex value) before picking one, the same way §0.4's
+    freed vars/flags were meant to be checked and Phase 1's var already was.
 
 ---
 
