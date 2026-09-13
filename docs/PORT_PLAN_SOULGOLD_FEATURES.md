@@ -207,7 +207,7 @@ Re-measure after each phase lands and update the table below.
 | Baseline (`main`) | 261168 B (99.63%) | 976 B | 22505416 B (67.07%) |
 | 1 — overworld speed | 261168 B (99.63%, unchanged) | 976 B | 22505896 B (67.07%, +480 B) |
 | 2 — battle speed | 261168 B (99.63%, unchanged) | 976 B | 22506852 B (67.08%, +956 B from Phase 1) |
-| 3 — dark/light UI | _pending_ | | |
+| 3 — dark/light UI | 261168 B (99.63%, unchanged) | 976 B | 22507816 B (67.08%, +964 B from Phase 2) |
 | 4 — party menu | _pending_ | | |
 
 ### 1.3 Commit hygiene
@@ -735,6 +735,101 @@ third style, or a theme abstraction.
 * Toggling the option mid-save and re-entering a battle applies immediately.
 * Dusk/night in-battle does not tint the dark UI.
 
+### 4.6 Implementation notes — landed, real deviations from §4.2/§4.3/§4.4 above
+
+Verified with a real `make modern` build (§0.3): 0 errors, 0 warnings in any
+touched file, EWRAM/IWRAM unchanged from the Phase 2 row in §1.2's table, ROM
++964 bytes (all `const` palette data, no new `EWRAM_DATA`). As with Phase 2,
+several §4.2/§4.3/§4.4 assumptions — carried over from Soulgold's own,
+different battle-UI architecture — turned out not to match HnS's actual
+source once traced, and the real design ended up simpler in some places and
+requiring more call sites in others:
+
+* **HnS has one text palette per window role, not Soulgold's separate
+  message/command palette split.** Tracing `sTextOnWindowsInfo_Normal[]` in
+  `src/battle_message.c` (the table that actually drives
+  `BattlePutTextOnWindow()`'s `fgColor`/`bgColor`/`shadowColor` per window)
+  showed HnS uses palette slot 0 for the message box and slot 5 for the
+  command menu, move selection *and* the level-up window all together —
+  Soulgold's `BATTLE_MESSAGE_TEXT_PAL_NUM`/`BATTLE_COMMAND_PAL_NUM` split does
+  not exist in HnS. This eliminates §4.4 step 7's separate text-colour
+  branches in `battle_message.c`/`battle_controller_player.c`/
+  `battle_script_commands.c` entirely: with slot 0 driven by
+  `gBattleTextboxPalette`/`gBattleTextboxPalette_Dark` and slot 5 by
+  `gBattleWindowTextPalette`/`gBattleWindowTextPalette_Dark` (both loaded in
+  `battle_bg.c`), every window that reads colours from those two slots — the
+  level-up window included, with no separate table needed for it — gets the
+  dark treatment for free at the palette level. No text-colour source changes
+  were needed anywhere.
+* **`LoadBattleMoveDescriptionWindowGfx()` does not exist in HnS** — grepped
+  and confirmed absent from both `src/` and `include/`. HnS has no separate
+  move-description window load path distinct from `LoadBattleMenuWindowGfx()`
+  (§4.4 step 3's second target), so only that one function needed the palette
+  swap.
+* **§4.4 step 8's day/night blend exclusion is not needed — verified, not
+  just skipped.** Grepped for `TimeMixBattleSpritePalette` and
+  `UpdatePalettesWithTime` across `src/palette.c` and every `src/battle*.c`
+  file: neither exists, and nothing in the battle scene's palette path calls
+  into a time-of-day blend. HnS's battle UI has no day/night palette tinting
+  at all, so there is no blend step to exclude the dark colours from.
+* **`BATTLE_WINDOW_DARK_BG_PAL_INDEX` (§4.4 step 2) was deliberately not
+  added.** The window *border* (palette slot 1, loaded by
+  `LoadUserWindowBorderGfx(..., BG_PLTT_ID(1))` in `LoadBattleMenuWindowGfx()`)
+  is shared with the game-wide, player-customisable "Frame" option
+  (`gSaveBlock2Ptr->optionsWindowFrameType`) — darkening it for the Dark UI
+  option would fight with whatever frame the player has chosen elsewhere.
+  Scope was narrowed to what §4.1 actually asked for (battle + Bag, matching
+  Soulgold's own scope): only the text palette (slot 5) and the two
+  textbox/background slots (slot 0) are swapped; the border is left alone in
+  both modes.
+* **The real `optionsNewBattleUI` branch count in `battle_interface.c` is 15,
+  not §4.4 step 6's estimated ~24.** All 15 were read; only two needed the
+  dark-routing treatment beyond `GetHealthBoxHealthBarPalettes()`
+  (`src/battle_gfx_sfx_util.c`, already handled by §4.4 step 5):
+  `GetStatusSummaryBarSpritePal()` and `GetStatusSummaryBallsSpritePal()`,
+  which select the identical `gBattleInterface_BallStatusBarPalGen3/4` and
+  `gBattleInterface_BallDisplayPalGen3/4` constants (just under the
+  `TAG_STATUS_SUMMARY_*` sprite tags instead of `TAG_HEALTHBOX_PAL`/
+  `TAG_HEALTHBAR_PAL`) — no new remap/copy helper table was needed, the same
+  four existing palette pairs are simply reused. The other 13 branches select
+  sprite sheets/tilemaps/coordinates that don't involve colour at all.
+* **No `graphics_file_rules.mk` entries were needed for any of the 8 new
+  `.pal` files.** `Makefile:271-277` has generic pattern rules
+  (`%.gbapal: %.pal`, `%.gbapal: %.png`, `%.lz: %`) that cover a bare
+  `.pal → .gbapal[.lz]` conversion with no per-file rule required — confirmed
+  by the fact that the build picked up all 8 files with zero
+  `graphics_file_rules.mk` changes.
+* **New `.pal` source files must use CRLF line endings, not LF.** `gbagfx`
+  rejected the first build attempt (`LF line endings aren't supported.`) for
+  every one of the 8 new files, which were authored with plain `\n`.
+  Byte-inspecting an existing, working `.pal` (`graphics/bag/menu_male.pal`)
+  confirmed every line ends `\r\n`. Fixed by converting all 8 new files
+  after the fact — this is a build-tool requirement worth flagging for any
+  future `.pal` file added by hand rather than exported from an image editor.
+* **HnS's bag male/female palettes are identical**, matching the light
+  versions (`graphics/bag/menu_male.pal`/`menu_female.pal` are themselves
+  byte-identical in HnS) — so `menu_male_dark.pal` and `menu_female_dark.pal`
+  were authored with the same content, as §4.4 step 9 anticipated checking.
+* **The dark colour values not already fixed by Soulgold's own proven
+  healthbox palette** (ball_display, ball_displaygen3, and both bag
+  palettes) were derived by reverse-engineering Soulgold's own darkening
+  ratio from its shipped healthbox dark palette (65→12, 227→43, 186→35,
+  154→29 all match `round(x × 3⁄16)` exactly) and applying that same ratio
+  mechanically to every remaining gray/chrome palette index that needed a new
+  value, leaving colourful accent indices (HP bar colours, ball icon colours)
+  untouched. This is a principled, reproducible substitute for the visual
+  judgement that would normally decide these values, and is called out here
+  since it cannot be verified by an automated build the way the mechanical
+  parts of this port can.
+* **`VAR_DARK_UI` needed no explicit default write in
+  `SetDefaultOptions()`**, unlike Phase 2's `VAR_BATTLE_SPEED`: Light (0) is
+  exactly what an untouched var already reads as, matching Phase 1's
+  overworld-speed default rather than Phase 2's — confirmed by reading
+  `SetDefaultOptions()` directly rather than assuming either pattern applied.
+  `NewGameInitData()` still needs the snapshot/restore carry-over (same as
+  Phases 1–2), since `InitEventData()` wipes `SaveBlock1` vars on every New
+  Game regardless of what the default was.
+
 ---
 
 ## 5. Phase 4 — Party menu UI
@@ -1056,7 +1151,7 @@ Soulgold's values, taken from `../soulgold/src/new_game.c`:
 |---|---|---|---|
 | Overworld speed | 1x (`:232-233`) | `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)` | **Landed (Phase 1)** — needed no explicit default write at all; 0 already means 1x. |
 | Battle speed | **2x** (`:144`) | `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X)` | **Landed (Phase 2)** — see below, not where this section originally said. |
-| Dark UI | Light / off (`:143`) | `VarSet(VAR_DARK_UI, 0)` | Planned (Phase 3) |
+| Dark UI | Light / off (`:143`) | (no write needed) | **Landed (Phase 3)** — like overworld speed, needed no explicit default write; 0 already means Light. |
 | Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` | Planned (Phase 4) |
 
 **Correction, found while landing Phase 2 (§3.8): "set all four in

@@ -938,7 +938,7 @@ void LoadBattleMenuWindowGfx(void)
 {
     LoadUserWindowBorderGfx(2, 0x12, BG_PLTT_ID(1));
     LoadUserWindowBorderGfx(2, 0x22, BG_PLTT_ID(1));
-    LoadCompressedPalette(gBattleWindowTextPalette, BG_PLTT_ID(5), PLTT_SIZE_4BPP);
+    LoadCompressedPalette(IsDarkUiEnabled() ? gBattleWindowTextPalette_Dark : gBattleWindowTextPalette, BG_PLTT_ID(5), PLTT_SIZE_4BPP);
 
     if (gBattleTypeFlags & BATTLE_TYPE_ARENA)
     {
@@ -1354,7 +1354,7 @@ void LoadBattleTextboxAndBackground(void)
     LZDecompressVram(gBattleTextboxTiles, (void *)(BG_CHAR_ADDR(0)));
     CopyToBgTilemapBuffer(0, gBattleTextboxTilemap, 0, 0);
     CopyBgTilemapBufferToVram(0);
-    LoadCompressedPalette(gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
+    LoadCompressedPalette(IsDarkUiEnabled() ? gBattleTextboxPalette_Dark : gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
     LoadBattleMenuWindowGfx();
     DrawMainBattleBackground();
 }
@@ -1713,7 +1713,7 @@ bool8 LoadChosenBattleElement(u8 caseId)
         CopyBgTilemapBufferToVram(0);
         break;
     case 2:
-        LoadCompressedPalette(gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
+        LoadCompressedPalette(IsDarkUiEnabled() ? gBattleTextboxPalette_Dark : gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
         break;
     case 3:
         if (gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK | BATTLE_TYPE_EREADER_TRAINER))
