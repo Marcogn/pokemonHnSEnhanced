@@ -1,0 +1,69 @@
+name: Build
+
+# Phase 0 of docs/PORT_PLAN_SOULGOLD_FEATURES.md: build the modern ROM on every
+# push and pull request, so a broken build fails visibly instead of silently.
+# This is the only build of record for this project — see the plan doc,
+# section 0.2, for why the legacy agbcc (MODERN=0) build is out of scope.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-modern:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils-arm-none-eabi gcc-arm-none-eabi libnewlib-arm-none-eabi \
+            libpng-dev
+
+      - name: Cache build tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            tools/aif2pcm/aif2pcm
+            tools/bin2c/bin2c
+            tools/gbafix/gbafix
+            tools/gbagfx/gbagfx
+            tools/jsonproc/jsonproc
+            tools/mapjson/mapjson
+            tools/mid2agb/mid2agb
+            tools/preproc/preproc
+            tools/ramscrgen/ramscrgen
+            tools/rsfont/rsfont
+            tools/scaninc/scaninc
+          key: tools-${{ runner.os }}-${{ hashFiles('tools/*/Makefile', 'tools/**/*.c', 'tools/**/*.cpp', 'tools/**/*.h') }}
+
+      - name: Build tools
+        run: make tools -j$(nproc)
+
+      - name: Build ROM (modern)
+        run: make modern -j$(nproc) 2>&1 | tee build.log
+
+      - name: Extract linker memory usage
+        run: |
+          grep -A6 -i "memory region" build.log > memory-usage.txt || echo "no memory-usage line found" > memory-usage.txt
+          cat memory-usage.txt
+
+      - name: Upload ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokemonHnS-rom
+          path: |
+            pokemonHnS.gba
+            pokemonHnS.map
+          if-no-files-found: error
+
+      - name: Upload memory usage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-usage
+          path: memory-usage.txt

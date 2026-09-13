@@ -20,6 +20,7 @@
 #include "constants/songs.h"
 #include "event_data.h"
 #include "sound.h"
+#include "overworld.h"
 
 enum
 {
@@ -48,6 +49,7 @@ enum
     MENUITEM_MAIN_UNIT_TYPE,
     //MENUITEM_MAIN_SKIP_INTRO,
     MENUITEM_MAIN_FRAMETYPE,
+    MENUITEM_MAIN_OVERWORLD_SPEED,
     MENUITEM_MAIN_COUNT,
 };
 
@@ -64,6 +66,7 @@ enum
     MENUITEM_BATTLE_TYPE_EFFECTIVE,
     MENUITEM_BATTLE_RUN_TYPE,
     MENUITEM_BATTLE_LR_RUN,
+    MENUITEM_BATTLE_SPEED,
     MENUITEM_BATTLE_COUNT,
 };
 
@@ -219,6 +222,7 @@ static void DrawChoices_Skip_Intro(int selection, int y);
 static void DrawChoices_LR_Run(int selection, int y);
 static void DrawChoices_Ball_Prompt(int selection, int y);
 static void DrawChoices_Unit_Type(int selection, int y);
+static void DrawChoices_OverworldSpeed(int selection, int y);
 static void DrawChoices_Music(int selection, int y);
 static void DrawChoices_New_Backgrounds(int selection, int y);
 static void DrawChoices_New_BattleUI(int selection, int y);
@@ -226,6 +230,7 @@ static void DrawChoices_GenOne_Recharge(int selection, int y);
 static void DrawChoices_Run_Type(int selection, int y);
 static void DrawChoices_Autorun_Surf(int selection, int y);
 static void DrawChoices_Autorun_Dive(int selection, int y);
+static void DrawChoices_BattleSpeed(int selection, int y);
 static void DrawBgWindowFrames(void);
 
 // EWRAM vars
@@ -272,8 +277,9 @@ struct // MENU_MAIN
     [MENUITEM_CUSTOM_FISHING]               = {DrawChoices_Fishing,          ProcessInput_Options_Two},
     [MENUITEM_MAIN_EVEN_FASTER_JOY]         = {DrawChoices_EvenFasterJoy,    ProcessInput_Options_Two},
     //[MENUITEM_MAIN_SKIP_INTRO]              = {DrawChoices_Skip_Intro,       ProcessInput_Options_Two}, 
-    [MENUITEM_MAIN_UNIT_TYPE]               = {DrawChoices_Unit_Type,        ProcessInput_Options_Two},  
+    [MENUITEM_MAIN_UNIT_TYPE]               = {DrawChoices_Unit_Type,        ProcessInput_Options_Two},
     [MENUITEM_MAIN_FRAMETYPE]               = {DrawChoices_FrameType,        ProcessInput_FrameType},
+    [MENUITEM_MAIN_OVERWORLD_SPEED]         = {DrawChoices_OverworldSpeed,   ProcessInput_Options_Four},
 };
 
 struct // MENU_CUSTOM
@@ -293,6 +299,7 @@ struct // MENU_CUSTOM
     [MENUITEM_BATTLE_NEW_BACKGROUNDS]  = {DrawChoices_New_Backgrounds,    ProcessInput_Options_Two},
     [MENUITEM_BATTLE_NEW_BATTLEUI]     = {DrawChoices_New_BattleUI,    ProcessInput_Options_Two},
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]     = {DrawChoices_GenOne_Recharge,    ProcessInput_Options_Two},
+    [MENUITEM_BATTLE_SPEED]            = {DrawChoices_BattleSpeed,       ProcessInput_Options_Three},
 };
 
 struct // MENU_SOUND
@@ -322,9 +329,11 @@ static const u8 sText_OptionSkipIntro[]           = _("SKIP INTRO");
 static const u8 sText_OptionLR_Run[]              = _("RUN PROMPT");
 static const u8 sText_OptionBallPrompt[]          = _("BALL PROMPT");
 static const u8 sText_OptionUnitType[]            = _("UNIT SYSTEM");
+static const u8 sText_OptionOverworldSpeed[]      = _("OW SPEED");
 static const u8 sText_OptionNewBackgrounds[]      = _("BATTLE TERRAIN");
 static const u8 sText_OptionNewBattleUI[]         = _("BATTLE UI");
 static const u8 sText_GenOneRecharge[]           = _("RECHARGE MOVES");
+static const u8 sText_OptionBattleSpeed[]        = _("BATTLE SPEED");
 static const u8 sText_OptionRunType[]             = _("QUICK RUN");
 static const u8 sText_AutorunEnable_Surf[]        = _("AUTORUN (SURF)");
 static const u8 sText_AutorunEnable_Dive[]        = _("AUTORUN (DIVE)");
@@ -346,6 +355,7 @@ static const u8 *const sOptionMenuItemsNamesMain[MENUITEM_MAIN_COUNT] =
     //[MENUITEM_MAIN_SKIP_INTRO]          = sText_OptionSkipIntro,
     [MENUITEM_MAIN_UNIT_TYPE]           = sText_OptionUnitType,
     [MENUITEM_MAIN_FRAMETYPE]           = gText_Frame,
+    [MENUITEM_MAIN_OVERWORLD_SPEED]     = sText_OptionOverworldSpeed,
 };
 
 static const u8 *const sOptionMenuItemsNamesCustom[MENUITEM_BATTLE_COUNT] =
@@ -360,6 +370,7 @@ static const u8 *const sOptionMenuItemsNamesCustom[MENUITEM_BATTLE_COUNT] =
     [MENUITEM_BATTLE_NEW_BACKGROUNDS]  = sText_OptionNewBackgrounds,
     [MENUITEM_BATTLE_NEW_BATTLEUI]     = sText_OptionNewBattleUI,
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]      = sText_GenOneRecharge,
+    [MENUITEM_BATTLE_SPEED]            = sText_OptionBattleSpeed,
 };
 
 static const u8 sText_OptionMusic[]                  = _("MUSIC");
@@ -416,6 +427,7 @@ static bool8 CheckConditions(int selection)
         case MENUITEM_MAIN_EVEN_FASTER_JOY:   return TRUE;
         //case MENUITEM_MAIN_SKIP_INTRO:        return TRUE;
         case MENUITEM_MAIN_UNIT_TYPE:         return TRUE;
+        case MENUITEM_MAIN_OVERWORLD_SPEED:   return TRUE;
         }
     case MENU_CUSTOM:
         switch(selection)
@@ -427,6 +439,7 @@ static bool8 CheckConditions(int selection)
         case MENUITEM_BATTLE_RUN_TYPE:        return TRUE;
         case MENUITEM_BATTLE_LR_RUN:          return sOptions->sel_battle[MENUITEM_BATTLE_RUN_TYPE] == 1 || sOptions->sel_battle[MENUITEM_BATTLE_RUN_TYPE] == 3;
         case MENUITEM_BATTLE_BALL_PROMPT:     return TRUE;
+        case MENUITEM_BATTLE_SPEED:           return TRUE;
         case MENUITEM_BATTLE_COUNT:           return TRUE;
         case MENUITEM_BATTLE_NEW_BACKGROUNDS: return TRUE;
         case MENUITEM_BATTLE_NEW_BATTLEUI:    return TRUE;
@@ -462,6 +475,7 @@ static const u8 sText_Desc_ButtonMode[]         = _("All buttons work as normal.
 static const u8 sText_Desc_ButtonMode_LR[]      = _("On some screens the L and R buttons\nact as left and right.");
 static const u8 sText_Desc_ButtonMode_LA[]      = _("The L button acts as another A\nbutton for one-handed play.");
 static const u8 sText_Desc_FrameType[]          = _("Choose the frame surrounding the\nwindows.");
+static const u8 sText_Desc_OverworldSpeed[]     = _("Overworld movement and animation\nspeed. Hold {L_BUTTON} for 1x.");
 static const u8 sText_Desc_FollowerOn[]            = _("Let the first POKéMON in your\nparty follow you.");
 static const u8 sText_Desc_FollowerOff[]           = _("Walk alone.");
 static const u8 sText_Desc_FollowerLargeOn[]       = _("Enable large {PKMN} followers.\nCan cause graphical issues.");
@@ -490,6 +504,7 @@ static const u8 *const sOptionMenuItemDescriptionsMain[MENUITEM_MAIN_COUNT][3] =
     [MENUITEM_MAIN_BATTLESTYLE] = {sText_Desc_BattleStyle_Shift,    sText_Desc_BattleStyle_Set, sText_Empty},
     [MENUITEM_MAIN_BUTTONMODE]  = {sText_Desc_ButtonMode,           sText_Desc_ButtonMode_LR,   sText_Desc_ButtonMode_LA},
     [MENUITEM_MAIN_FRAMETYPE]   = {sText_Desc_FrameType,            sText_Empty,                sText_Empty},
+    [MENUITEM_MAIN_OVERWORLD_SPEED] = {sText_Desc_OverworldSpeed,   sText_Empty,                sText_Empty},
     [MENUITEM_MAIN_FOLLOWER]    = {sText_Desc_FollowerOn,           sText_Desc_FollowerOff},
     [MENUITEM_MAIN_LARGE_FOLLOWER]    = {sText_Desc_FollowerLargeOn,           sText_Desc_FollowerLargeOff},
     [MENUITEM_MAIN_AUTORUN]     = {sText_Desc_AutorunOn,            sText_Desc_AutorunOff},
@@ -525,6 +540,9 @@ static const u8 sText_Desc_NewBattleUI_Old[]        = _("Original GEN III Battle
 static const u8 sText_Desc_NewBattleUI_New[]        = _("Modernized GEN IV Battle UI.");
 static const u8 sText_Desc_GenThreeRecharge[]      = _("RECHARGE MOVES like HYPER BEAM will\nalways need to recharge after use.");
 static const u8 sText_Desc_GenOneRecharge[]        = _("If a RECHARGE MOVE KO's the opponent,\nno recharge turn is needed.");
+static const u8 sText_Desc_BattleSpeed1x[]         = _("Battle animations and delays run\nat normal speed.");
+static const u8 sText_Desc_BattleSpeed2x[]         = _("Battle animations and delays run\nat double speed. Hold {L_BUTTON} for 1x.");
+static const u8 sText_Desc_BattleSpeed3x[]         = _("Battle animations and delays run\nat triple speed. Hold {L_BUTTON} for 1x.");
 static const u8 sText_Desc_NewBackgrounds_New[]     = _("Modernized battle terrain\nbackgrounds, from HnS.");
 static const u8 *const sOptionMenuItemDescriptionsCustom[MENUITEM_BATTLE_COUNT][4] =
 {
@@ -539,6 +557,7 @@ static const u8 *const sOptionMenuItemDescriptionsCustom[MENUITEM_BATTLE_COUNT][
     [MENUITEM_BATTLE_NEW_BATTLEUI]        = {sText_Desc_NewBattleUI_Old,          sText_Desc_NewBattleUI_New},
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]  = {sText_Desc_GenThreeRecharge,          sText_Desc_GenOneRecharge},
     [MENUITEM_BATTLE_RUN_TYPE]            = {sText_Desc_Run_Type_Off,             sText_Desc_Run_Type_LR,             sText_Desc_Run_Type_B,         sText_Desc_Run_Type_B_2},
+    [MENUITEM_BATTLE_SPEED]               = {sText_Desc_BattleSpeed1x,            sText_Desc_BattleSpeed2x,           sText_Desc_BattleSpeed3x},
 };
 
 static const u8 sText_Desc_SoundMono[]                       = _("Sound is the same in all speakers.\nRecommended for original hardware.");
@@ -582,6 +601,7 @@ static const u8 *const sOptionMenuItemDescriptionsDisabledMain[MENUITEM_MAIN_COU
     [MENUITEM_MAIN_BATTLESTYLE] = sText_Empty,
     [MENUITEM_MAIN_BUTTONMODE]  = sText_Empty,
     [MENUITEM_MAIN_FRAMETYPE]   = sText_Empty,
+    [MENUITEM_MAIN_OVERWORLD_SPEED] = sText_Empty,
     [MENUITEM_MAIN_FOLLOWER]    = sText_Desc_Disabled_BattleHPBar,
     [MENUITEM_MAIN_LARGE_FOLLOWER]    = sText_Desc_Disabled_BattleHPBar,
     [MENUITEM_MAIN_AUTORUN]     = sText_Empty,
@@ -607,6 +627,7 @@ static const u8 *const sOptionMenuItemDescriptionsDisabledCustom[MENUITEM_BATTLE
     [MENUITEM_BATTLE_NEW_BATTLEUI]        = sText_Empty,
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]  = sText_Empty,
     [MENUITEM_BATTLE_RUN_TYPE]            = sText_Empty,
+    [MENUITEM_BATTLE_SPEED]               = sText_Empty,
 };
 
 static const u8 *const sOptionMenuItemDescriptionsDisabledSound[MENUITEM_SOUND_COUNT] =
@@ -632,7 +653,8 @@ static const u8 *const OptionTextDescription(void)
         if (!CheckConditions(menuItem))
             return sOptionMenuItemDescriptionsDisabledMain[menuItem];
         selection = sOptions->sel[menuItem];
-        if (menuItem == MENUITEM_MAIN_TEXTSPEED || menuItem == MENUITEM_MAIN_FRAMETYPE)
+        if (menuItem == MENUITEM_MAIN_TEXTSPEED || menuItem == MENUITEM_MAIN_FRAMETYPE
+         || menuItem == MENUITEM_MAIN_OVERWORLD_SPEED)
             selection = 0;
         return sOptionMenuItemDescriptionsMain[menuItem][selection];
     case MENU_CUSTOM:
@@ -872,6 +894,9 @@ void CB2_InitOptionPlusMenu(void)
         sOptions->sel[MENUITEM_MAIN_EVEN_FASTER_JOY]     = gSaveBlock2Ptr->optionsEvenFasterJoy;
         //sOptions->sel[MENUITEM_MAIN_SKIP_INTRO]          = gSaveBlock2Ptr->optionsSkipIntro;
         sOptions->sel[MENUITEM_MAIN_UNIT_TYPE]           = gSaveBlock2Ptr->optionsUnitSystem;
+        sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED]     = VarGet(VAR_OVERWORLD_SPEEDUP);
+        if (sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED] > OPTIONS_OVERWORLD_SPEED_4X)
+            sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED] = OPTIONS_OVERWORLD_SPEED_1X;
 
         sOptions->sel_battle[MENUITEM_BATTLE_FAST_INTRO]        = gSaveBlock2Ptr->optionsFastIntro;
         sOptions->sel_battle[MENUITEM_BATTLE_FAST_BATTLES]      = gSaveBlock2Ptr->optionsFastBattle;
@@ -883,6 +908,9 @@ void CB2_InitOptionPlusMenu(void)
         sOptions->sel_battle[MENUITEM_BATTLE_NEW_BATTLEUI]      = gSaveBlock2Ptr->optionsNewBattleUI;
         sOptions->sel_battle[MENUITEM_BATTLE_GEN_ONE_RECHARGE]      = gSaveBlock2Ptr->optionsGenOneRecharge;
         sOptions->sel_battle[MENUITEM_BATTLE_RUN_TYPE]          = gSaveBlock2Ptr->optionsRunType;
+        sOptions->sel_battle[MENUITEM_BATTLE_SPEED]             = VarGet(VAR_BATTLE_SPEED);
+        if (sOptions->sel_battle[MENUITEM_BATTLE_SPEED] >= OPTIONS_BATTLE_SPEED_COUNT)
+            sOptions->sel_battle[MENUITEM_BATTLE_SPEED] = OPTIONS_BATTLE_SPEED_1X;
 
         sOptions->sel_sound[MENUITEM_SOUND_SOUND]                             = gSaveBlock2Ptr->optionsSound;
         sOptions->sel_sound[MENUITEM_SOUND_MUSIC]                             = gSaveBlock2Ptr->optionsMusicOnOff;
@@ -1112,6 +1140,7 @@ static void Task_OptionMenuSave(u8 taskId)
     gSaveBlock2Ptr->optionsEvenFasterJoy         = sOptions->sel[MENUITEM_MAIN_EVEN_FASTER_JOY];
     //gSaveBlock2Ptr->optionsSkipIntro             = sOptions->sel[MENUITEM_MAIN_SKIP_INTRO];
     gSaveBlock2Ptr->optionsUnitSystem            = sOptions->sel[MENUITEM_MAIN_UNIT_TYPE];
+    VarSet(VAR_OVERWORLD_SPEEDUP, sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED]);
 
     gSaveBlock2Ptr->optionsFastIntro        = sOptions->sel_battle[MENUITEM_BATTLE_FAST_INTRO];
     gSaveBlock2Ptr->optionsFastBattle       = sOptions->sel_battle[MENUITEM_BATTLE_FAST_BATTLES];
@@ -1123,7 +1152,8 @@ static void Task_OptionMenuSave(u8 taskId)
     gSaveBlock2Ptr->optionsNewBattleUI      = sOptions->sel_battle[MENUITEM_BATTLE_NEW_BATTLEUI];
     gSaveBlock2Ptr->optionsGenOneRecharge  = sOptions->sel_battle[MENUITEM_BATTLE_GEN_ONE_RECHARGE];
     gSaveBlock2Ptr->optionsRunType          = sOptions->sel_battle[MENUITEM_BATTLE_RUN_TYPE];
-    
+    VarSet(VAR_BATTLE_SPEED, sOptions->sel_battle[MENUITEM_BATTLE_SPEED]);
+
     gSaveBlock2Ptr->optionsSound            = sOptions->sel_sound[MENUITEM_SOUND_SOUND];
     gSaveBlock2Ptr->optionsMusicOnOff       = sOptions->sel_sound[MENUITEM_SOUND_MUSIC];
     //gSaveBlock2Ptr->optionsBikeMusic        = sOptions->sel_sound[MENUITEM_SOUND_BIKE_MUSIC];
@@ -1424,6 +1454,17 @@ static void DrawChoices_TextSpeed(int selection, int y)
 {
     bool8 active = CheckConditions(MENUITEM_MAIN_TEXTSPEED);
     DrawChoices_Options_Four(sTextSpeedStrings, selection, y, active);
+}
+
+static const u8 sText_OverworldSpeed1x[] = _("1X");
+static const u8 sText_OverworldSpeed2x[] = _("2X");
+static const u8 sText_OverworldSpeed3x[] = _("3X");
+static const u8 sText_OverworldSpeed4x[] = _("4X");
+static const u8 *const sOverworldSpeedStrings[] = {sText_OverworldSpeed1x, sText_OverworldSpeed2x, sText_OverworldSpeed3x, sText_OverworldSpeed4x};
+static void DrawChoices_OverworldSpeed(int selection, int y)
+{
+    bool8 active = CheckConditions(MENUITEM_MAIN_OVERWORLD_SPEED);
+    DrawChoices_Options_Four(sOverworldSpeedStrings, selection, y, active);
 }
 
 static void DrawChoices_BattleScene(int selection, int y)
@@ -2049,6 +2090,18 @@ static void DrawChoices_Run_Type(int selection, int y)
     {
         gSaveBlock2Ptr->optionsRunType = 3; //Hold B (before battle)
     }
+}
+
+static void DrawChoices_BattleSpeed(int selection, int y)
+{
+    bool8 active = CheckConditions(MENUITEM_BATTLE_SPEED);
+    u8 styles[3] = {0};
+    int xMid = GetMiddleX(sText_OverworldSpeed1x, sText_OverworldSpeed2x, sText_OverworldSpeed3x);
+    styles[selection] = 1;
+
+    DrawOptionMenuChoice(sText_OverworldSpeed1x, 104, y, styles[0], active);
+    DrawOptionMenuChoice(sText_OverworldSpeed2x, xMid, y, styles[1], active);
+    DrawOptionMenuChoice(sText_OverworldSpeed3x, GetStringRightAlignXOffset(1, sText_OverworldSpeed3x, 198), y, styles[2], active);
 }
 
 static void DrawChoices_Autorun_Surf(int selection, int y)

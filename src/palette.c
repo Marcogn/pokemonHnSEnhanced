@@ -146,6 +146,11 @@ u8 UpdatePaletteFade(void)
     return result;
 }
 
+bool32 IsPaletteFadeTransferPending(void)
+{
+    return sPlttBufferTransferPending != 0;
+}
+
 void ResetPaletteFade(void)
 {
     u8 i;

@@ -30,6 +30,19 @@
 #define TIME_OF_DAY_DAY 2
 #define TIME_OF_DAY_MAX TIME_OF_DAY_DAY
 
+// Overworld movement/animation speed-up option. Hold L to force 1x.
+// The "EXTRA_ITERATIONS" values are how many additional times CB2_Overworld's
+// sprite/camera update runs per VBlank on top of the normal one, so 1x runs
+// once (0 extra) and 4x runs four times (3 extra).
+#define OPTIONS_OVERWORLD_SPEED_1X                  0
+#define OPTIONS_OVERWORLD_SPEED_2X                  1
+#define OPTIONS_OVERWORLD_SPEED_3X                  2
+#define OPTIONS_OVERWORLD_SPEED_4X                  3
+#define OPTIONS_OVERWORLD_SPEED_1X_EXTRA_ITERATIONS 0
+#define OPTIONS_OVERWORLD_SPEED_2X_EXTRA_ITERATIONS 1
+#define OPTIONS_OVERWORLD_SPEED_3X_EXTRA_ITERATIONS 2
+#define OPTIONS_OVERWORLD_SPEED_4X_EXTRA_ITERATIONS 3
+
 struct InitialPlayerAvatarState
 {
     u8 transitionFlags;
@@ -155,6 +168,7 @@ u8 UpdateTimeOfDay(void);
 bool8 MapHasNaturalLight(u8 mapType);
 void UpdateAltBgPalettes(u16 palettes);
 void UpdatePalettesWithTime(u32);
+u8 OverworldSpeedup_AdditionalIterations(u16 speed, bool32 overworld);
 void CB2_Overworld(void);
 void SetMainCallback1(void (*cb)(void));
 void SetUnusedCallback(void *func);

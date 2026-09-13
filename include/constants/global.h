@@ -135,6 +135,15 @@
 #define OPTIONS_BATTLE_STYLE_SHIFT 0
 #define OPTIONS_BATTLE_STYLE_SET 1
 
+// Battle animation/delay speed-up option. Hold L to force 1x. Independent of
+// optionsBattleSceneOff (whether battle animations play at all) - this only
+// changes how fast they play when they do. Move selection and the Bag/party
+// sub-menus always run at 1x regardless of this setting.
+#define OPTIONS_BATTLE_SPEED_1X    0
+#define OPTIONS_BATTLE_SPEED_2X    1
+#define OPTIONS_BATTLE_SPEED_3X    2
+#define OPTIONS_BATTLE_SPEED_COUNT 3
+
 #define DIR_NONE        0
 #define DIR_SOUTH       1
 #define DIR_NORTH       2

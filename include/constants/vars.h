@@ -204,7 +204,7 @@
 #define VAR_UNUSED_0x40B8                                0x40B8 // Unused Var
 #define VAR_MT_PYRE_STATE                                0x40B9
 #define VAR_NEW_MAUVILLE_STATE                           0x40BA
-#define VAR_UNUSED_0x40BB                                0x40BB // Unused Var
+#define VAR_OVERWORLD_SPEEDUP                            0x40BB // OPTIONS_OVERWORLD_SPEED_*, see include/overworld.h
 #define VAR_BRAVO_TRAINER_BATTLE_TOWER_ON                0x40BC
 #define VAR_JAGGED_PASS_ASH_WEATHER                      0x40BD
 #define VAR_GLASS_WORKSHOP_STATE                         0x40BE
@@ -269,7 +269,7 @@
 #define VAR_RAIKOU_EVENT                                 0x40F9
 #define VAR_CONTEST_HALL_STATE                           0x40FA
 #define VAR_UNUSED_0x40FB                                0x40FB // Unused Var
-#define VAR_UNUSED_0x40FC                                0x40FC // Unused Var
+#define VAR_BATTLE_SPEED                                 0x40FC // OPTIONS_BATTLE_SPEED_*, see include/constants/global.h
 #define VAR_SURF_MON_SLOT                                0x40FD // Added new VAR for Surfing Overworld Sprites - Holds Surfing Party Mon index
 #define VAR_FREEZE_SURF_BLOB                             0x40FE // Added new VAR for Surfing Overworld Sprites - Set on surf init to stop blob overlay being offset incorrectly
 #define VAR_GARBAGEVAR                                0x40FF // Used to replace little root state
