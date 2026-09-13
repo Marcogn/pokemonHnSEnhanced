@@ -834,6 +834,59 @@ requiring more call sites in others:
   Phases 1–2), since `InitEventData()` wipes `SaveBlock1` vars on every New
   Game regardless of what the default was.
 
+### 4.7 Post-release fix — dark palette values were over-darkened
+
+The user played a real build and reported the Dark UI option breaking the
+battle healthbar and making the Bag background "completamente scuro" (looks
+like flat black with no visible frame). Re-comparing against Soulgold's real
+shipped data (not the mechanical extrapolation from §4.6) found two separate
+mistakes, fixed by re-tracing what Soulgold *actually* does rather than
+reasoning about the numbers again:
+
+* **The `× 3⁄16` ratio reverse-engineered in §4.6 is only valid for the one
+  palette Soulgold actually ships a dark variant for — the healthbox frame**
+  (`ball_status_bar`/`ball_status_bargen3`, entries 0–4). Applying the same
+  ratio to the Bag palettes crushed their 5-step bevel-gray ramp
+  (255/205/164/123/98) down to a 18–48 band that reads as flat black on a GBA
+  screen — the ramp needs to stay a ramp to look like a frame at all. Fixed
+  by re-deriving the Bag's dark values directly from Soulgold's own
+  `menu_male_dark.pal`/`menu_female_dark.pal`, index by index: Soulgold
+  darkens its equivalent chrome/gradient indices to roughly 50–90% of their
+  original brightness (preserving the ramp's contrast) and reserves the
+  extreme ×3⁄16-ish crush for exactly one flat single-tone fill color. HnS's
+  bag chrome indices got the same treatment: ~55–60% brightness kept instead
+  of ~19%, while the untouched item-icon/accent indices (already
+  byte-identical to light, correctly) were left alone.
+* **Soulgold has no dark variant for the healthbar or the status-summary
+  ball row at all.** Traced `LoadBattleInterfacePalettes`,
+  `sSpritePalettes_HealthBoxHealthBar[]`, `sStatusSummaryBarSpritePal` and
+  `sStatusSummaryBallsSpritePal` in Soulgold's `battle_gfx_sfx_util.c`/
+  `battle_interface.c`: only `TAG_HEALTHBOX_PAL` (the frame) swaps for dark;
+  `TAG_HEALTHBAR_PAL` and the status-summary tags are always loaded from the
+  plain light palette, unconditionally, even when Soulgold's own Dark UI
+  option is on. HnS had invented `ball_display_dark`/`ball_displaygen3_dark`
+  (the actual HP/EXP gauge fill) with no Soulgold precedent to copy — this is
+  the likely source of the reported gauge corruption, since those values were
+  never validated against anything real. Fixed by mirroring Soulgold exactly:
+  `GetHealthBoxHealthBarPalettes()`, `GetStatusSummaryBarSpritePal()` and
+  `GetStatusSummaryBallsSpritePal()` now always use the light
+  `gBattleInterface_BallDisplayPalGen3/4` and
+  `gBattleInterface_BallStatusBarPalGen3/4` for the bar/balls regardless of
+  the Dark UI setting, and the now-unused `ball_display_dark.pal`/
+  `ball_displaygen3_dark.pal` files and their `graphics.c`/`graphics.h`
+  declarations were deleted rather than kept as dead ROM data.
+* `ball_status_bar_dark.pal`/`ball_status_bargen3_dark.pal` (the healthbox
+  frame itself) were **not** touched — re-verified against Soulgold's shipped
+  `dark_healthbox.pal` and confirmed still byte-correct (mod GBA 5-bit
+  quantization), matching what §4.3/§4.6 already established.
+* `text_dark.pal` (`gBattleWindowTextPalette_Dark`, palette slot 5) had a
+  separate, unrelated bug: indices 11–14 were inverted (a mid-gray became
+  white, white became near-black) instead of darkened, which was never a
+  Soulgold-derived value to begin with. Fixed to a plain proportional darken
+  (~60% brightness) like the rest, with no inversion.
+* Verified with `make modern`: 0 errors, 0 new warnings, ROM size decreased
+  slightly (removed dead palette data) instead of growing.
+
 ---
 
 ## 5. Phase 4 — Party menu UI

@@ -355,13 +355,11 @@ const u16 gBattleInterface_BallStatusBarPalGen4[] = INCBIN_U16("graphics/battle_
 const u16 gBattleInterface_BallStatusBarPalGen4_Dark[] = INCBIN_U16("graphics/battle_interface/ball_status_bar_dark.gbapal");
 
 const u16 gBattleInterface_BallDisplayPalGen4[] = INCBIN_U16("graphics/battle_interface/ball_display.gbapal");
-const u16 gBattleInterface_BallDisplayPalGen4_Dark[] = INCBIN_U16("graphics/battle_interface/ball_display_dark.gbapal");
 
 const u16 gBattleInterface_BallStatusBarPalGen3[] = INCBIN_U16("graphics/battle_interface/ball_status_bargen3.gbapal");
 const u16 gBattleInterface_BallStatusBarPalGen3_Dark[] = INCBIN_U16("graphics/battle_interface/ball_status_bargen3_dark.gbapal");
 
 const u16 gBattleInterface_BallDisplayPalGen3[] = INCBIN_U16("graphics/battle_interface/ball_displaygen3.gbapal");
-const u16 gBattleInterface_BallDisplayPalGen3_Dark[] = INCBIN_U16("graphics/battle_interface/ball_displaygen3_dark.gbapal");
 
 const u8 gHealthboxElementsGfxTableGen4[] = INCBIN_U8("graphics/battle_interface/hpbar.4bpp",
                                                   "graphics/battle_interface/expbar.4bpp",
