@@ -9,7 +9,7 @@ Features requested, in the order they should be implemented:
 1. Overworld speed-up (1x–4x, hold a button for 1x)
 2. Battle speed-up (1x–3x, hold a button for 1x)
 3. Dark / Light UI with an options toggle (battle UI + Bag)
-4. Party menu UI from Soulgold
+4. Party menu UI from Soulgold (the SwSh-style "Custom" screen)
 
 Hard constraint from the request: **do not break the build.**
 
@@ -217,9 +217,8 @@ Add to `src/options_plus_menu.c`, page `MENU_MAIN` (it is an overworld setting):
   `src/options_plus_menu.c:872`): `sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED] = VarGet(VAR_OVERWORLD_SPEEDUP);`
 * save in the apply block (around `src/options_plus_menu.c:1112`):
   `VarSet(VAR_OVERWORLD_SPEEDUP, sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED]);`
-* `src/new_game.c`: set the default. SG defaults the overworld to 1x
-  (`src/new_game.c:232-233`). Recommend `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)`
-  so new players see stock behaviour until they opt in.
+* `src/new_game.c`: set the default — see §6.1. For this option it is
+  `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)`, matching SG.
 
 > Note on style: several existing `DrawChoices_*` functions in HnS write to
 > `gSaveBlock2Ptr` from inside the draw call. That is a pre-existing smell.
@@ -309,7 +308,7 @@ invasive and far easier to keep correct. Reference:
 6. **Do not** touch `src/main.c`'s VBlank RNG or `VBlankCB_Battle`
    (`src/battle_main.c:2733`) in the first cut — see §3.4.
 
-### 3.4 RNG: the one real correctness trap
+### 3.4 RNG: decided — ship without the rework
 
 In HnS, `Random()` is called once per VBlank in `src/main.c:363` **and** once in
 `VBlankCB_Battle` (`src/battle_main.c:2736`). Those calls are what make "waiting
@@ -324,13 +323,12 @@ SG solves this by moving the burns to the logical frame boundary
 it requires touching the global VBlank handler, which is the highest-blast-radius
 file in the project.
 
-**Recommendation: ship Phase 2 without the RNG change**, document the behaviour
-in the option description ("battle outcomes may differ between speeds"), and
-only revisit if the author considers speed-dependent RNG a defect. If they do,
-the change is: move both `Random()` calls out of the VBlank handlers and into an
-`AdvanceBattleFrameRng()` called once per logical tick in `BattleMainCB2`,
-guarded by `!(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_RECORDED))`.
-**Do it as a separate, clearly-labelled commit** so it can be reverted alone.
+**DECIDED by the author: speed-dependent RNG is acceptable.** Ship Phase 2
+without the RNG rework. Do **not** touch `src/main.c`'s VBlank handler or
+`VBlankCB_Battle`. Leave both `Random()` calls exactly where they are.
+
+Nothing needs to be written in the option description about this — it is not a
+user-visible defect, just a consequence of the frame model.
 
 ### 3.5 Things that will break if you are careless
 
@@ -358,7 +356,8 @@ Same recipe as §2.4, but on the `MENU_CUSTOM` (battle) page:
 `MENUITEM_BATTLE_SPEED`, `sItemFunctionsCustom`, `sel_battle[]`,
 `ProcessInput_Options_Four` (expose 1x/2x/3x + Off-equivalent, or add a
 three-option helper — SG exposes only 1x/2x/3x, `src/option_menu.c:1478-1530`).
-Default in `src/new_game.c`: `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SCENE_1X)`.
+Default in `src/new_game.c`: **2x**, matching SG — see §6.1, and read §6.2 on
+why existing saves are deliberately left at 1x.
 
 ### 3.7 Acceptance
 
@@ -379,20 +378,20 @@ Default in `src/new_game.c`: `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SCENE_1X)`
 **Risk: medium. Effort: ~10 files, mostly palette data. The hard part is asset
 archaeology, not logic.**
 
-### 4.1 Scope, honestly stated
+### 4.1 Scope — DECIDED: battle + Bag only, exactly as in Soulgold
 
 In SG this is not a general theme engine. It is a targeted re-palette of:
 
 * the battle message box, command menu and move-description window,
-* the healthboxes (HP bar + status icons, via a 4bpp **index remap**, not a
-  palette swap),
+* the healthboxes (a **whole-palette swap** plus a small 4bpp index remap for
+  the pixels that must not follow the swap — see §4.3),
 * the level-up stat window and a few battle-script windows,
 * the Bag screen (background palette, pocket indicators, HM icon, TM/HM info
   text).
 
 It does **not** touch the overworld, the Pokédex, the summary screen, the PC,
-or the party menu. Setting expectations with the author up front is part of this
-phase.
+or the party menu — and per the author's decision it must not be extended to
+them in this phase.
 
 ### 4.2 SG reference map
 
@@ -403,7 +402,8 @@ phase.
 | Battle window pals | `src/battle_bg.c:804-843` (`LoadBattleMenuWindowGfx`, `LoadBattleMoveDescriptionWindowGfx`) |
 | Window pal index | `include/battle_bg.h:5` `BATTLE_WINDOW_DARK_BG_PAL_INDEX 8` |
 | Healthbox remap | `src/battle_interface.c:46-54` (index constants), `:905-1005` (`IsDarkHealthbox`, `RemapHealthbarGfxIndexes`, `CopyHealthbarGfx`, `CopyStatusIconGfx`) |
-| Healthbox pal pick | `src/battle_gfx_sfx_util.c:91` |
+| Healthbox pal pick | `src/battle_gfx_sfx_util.c:86-100` (`LoadBattleInterfacePalettes`) |
+| Dark healthbox palette | `graphics/battle_interface/dark_healthbox.pal` |
 | Message text | `src/battle_message.c:2231` |
 | Player controller | `src/battle_controller_player.c:1939-1986` |
 | Level-up window | `src/battle_script_commands.c:7287-7296`, `:12120-12171`, `:16544-16557` |
@@ -412,30 +412,77 @@ phase.
 | Bag dark palettes | `graphics/bag/menu_male_dark.pal`, `graphics/bag/menu_female_dark.pal` (367/369 bytes) |
 | Option UI | `src/option_menu.c:1614-1615`, help text at `:411` |
 
-### 4.3 The part that is NOT a copy: healthbox index remapping
+### 4.3 How the dark healthbox actually works (simpler than it looks)
 
-SG's `RemapHealthbarGfxIndexes` hardcodes palette indices
-(`HEALTHBAR_LIGHT_COLOR_1 = 1`, `HEALTHBAR_DARK_COLOR_1 = 5`,
-`STATUS_ICON_LIGHT_COLOR_1 = 4`, `STATUS_ICON_DARK_COLOR_1 = 5`). Those numbers
-are specific to SG's healthbox art.
+The palettes were dumped and compared; here is the real mechanism, so nobody
+reinvents it.
 
-**HnS has two healthbox styles**, selected at runtime by
-`gSaveBlock2Ptr->optionsNewBattleUI` (`include/global.h:571`, consumed in ~24
-places across `src/battle_interface.c` and `src/battle_gfx_sfx_util.c`).
+**SG's `dark_healthbox.pal` is `ball_status_bar.png`'s palette with entries
+1–4 darkened and everything else byte-identical:**
 
-So before writing any code:
+| idx | SG light | SG dark |
+|---|---|---|
+| 0 | 0,0,0 | 0,0,0 |
+| 1 | 65,65,65 | **12,12,12** |
+| 2 | 227,227,227 | **43,43,43** |
+| 3 | 186,186,186 | **35,35,35** |
+| 4 | 154,154,154 | **29,29,29** |
+| 5–15 | — | unchanged |
 
-1. Open HnS's healthbox and status-icon graphics (find them via the INCBINs in
-   `src/battle_interface.c` / `src/graphics.c`) and determine, **for each of the
-   two styles**, which palette indices carry the light-background pixels.
-2. Decide whether "Dark" applies to both styles or only one. Simplest defensible
-   answer: implement dark for both, with a separate index pair per style.
-3. If the indices cannot be made to work for one style, gate the Dark option
-   off for that style via the existing `CheckConditions()` mechanism in
-   `src/options_plus_menu.c` rather than shipping something visually broken.
+Indices 1–4 are the healthbox frame and text, so swapping the palette darkens
+the whole box for free. `LoadBattleInterfacePalettes` (SG
+`src/battle_gfx_sfx_util.c:86-100`) just picks the other palette under the same
+`TAG_HEALTHBOX_PAL`.
 
-Do not skip step 1. Guessing the indices produces garbled healthbars that look
-like a hardware bug.
+The **index remap** exists only for the pixels that must *not* follow that
+swap — the HP bar and the status icon, which would become unreadable. SG's
+constants (`src/battle_interface.c:46-54`):
+
+```
+HEALTHBAR_LIGHT_COLOR_1  1   →  HEALTHBAR_DARK_COLOR_1   5
+HEALTHBAR_LIGHT_COLOR_2  3   →  HEALTHBAR_DARK_COLOR_2   8
+STATUS_ICON_LIGHT_COLOR_1 4  →  STATUS_ICON_DARK_COLOR_1 5
+STATUS_ICON_LIGHT_COLOR_2 2  →  STATUS_ICON_DARK_COLOR_2 6
+```
+
+SG's indices 5 and 8 are `(114,108,79)` and `(217,183,0)` — the olive/yellow HP
+shades, which stay legible on a dark box.
+
+### 4.3.1 What differs in HnS
+
+HnS ships **two** healthbox styles, chosen by
+`gSaveBlock2Ptr->optionsNewBattleUI` (`include/global.h:571`). They are Gen 3
+and Gen 4 art with **separate palettes**, loaded in
+`GetHealthBoxHealthBarPalettes()` (`src/battle_gfx_sfx_util.c:113-127`):
+`gBattleInterface_BallStatusBarPalGen4` ←
+`graphics/battle_interface/ball_status_bar.png`, and `...PalGen3` ←
+`ball_status_bargen3.png`.
+
+Their palettes were dumped. Entries 0–4 are what matter, and:
+
+| idx | HnS Gen4 | HnS Gen3 | SG |
+|---|---|---|---|
+| 0 | 0,0,0 | 0,0,0 | 0,0,0 |
+| 1 | 65,65,65 | 65,65,65 | 65,65,65 |
+| 2 | 227,227,227 | 255,255,255 | 227,227,227 |
+| 3 | 186,186,186 | 222,214,222 | 186,186,186 |
+| 4 | 154,154,154 | 189,189,189 | 154,154,154 |
+
+**Gen4 is index-identical to SG at 0–4**, so SG's darkened values transfer
+verbatim. Gen3 uses the same *roles* at the same indices, just lighter shades —
+darken them to the same targets (12/43/35/29) and it works the same way.
+
+Entries 5–8 differ between all three (HnS Gen4: 5=`123,148,131`, 7=`113,113,113`,
+8=`48,97,219`; HnS Gen3: 5=`123,148,131`, 6=`82,106,98`, 7=`32,57,0`,
+8=`57,82,65`). So the **`*_DARK_COLOR_*` targets cannot be copied from SG** —
+pick, per style, indices whose colours stay readable on the dark box. Verify by
+looking at the actual PNGs, not by reasoning about the numbers.
+
+**Decision (per the author: do it like Soulgold, don't over-engineer):**
+implement Dark for **both** styles — the toggle must not silently do nothing
+depending on the other toggle. That costs two `.pal` files and a two-entry
+constant table, nothing more. Do **not** add a `CheckConditions()` gate, a
+third style, or a theme abstraction.
 
 ### 4.4 Steps
 
@@ -444,39 +491,48 @@ like a hardware bug.
    Add a tiny inline accessor, e.g. in `include/battle_bg.h`:
    `static inline bool8 IsDarkUiEnabled(void) { return VarGet(VAR_DARK_UI) != 0; }`
    and use it everywhere instead of scattering `VarGet` calls.
-   *(If the author prefers a `SaveBlock2` bit for consistency with their other
-   options, it must be appended at the very end of the struct, after
-   `optionsGenOneRecharge`, and guarded by a magic byte — see §5.4.)*
+   A `SaveBlock2` bit is ruled out — see §0.4 and §6.2.
 2. `include/battle_bg.h`: add `BATTLE_WINDOW_DARK_BG_PAL_INDEX`.
    Verify the value `8` is the right slot in HnS's battle window palette before
    copying it — HnS's `src/battle_bg.c` is 1925 lines vs SG's 1239 and has been
    modified.
 3. `src/battle_bg.c`: add the dark palette tables and the branch in
    `LoadBattleMenuWindowGfx()` / `LoadBattleMoveDescriptionWindowGfx()`.
-4. `src/battle_interface.c`: add the index constants and the four remap/copy
-   helpers, and route the existing healthbar/status-icon copies through them.
+4. Create the two dark palettes per §4.3.1:
+   `graphics/battle_interface/dark_healthbox.pal` (from `ball_status_bar.png`,
+   the Gen 4 style) and `graphics/battle_interface/dark_healthboxgen3.pal`
+   (from `ball_status_bargen3.png`). Add the INCBINs next to the existing ones
+   in `src/graphics.c:353-357` and the externs in `include/graphics.h`.
+5. `src/battle_gfx_sfx_util.c`: extend `GetHealthBoxHealthBarPalettes()`
+   (`:113-127`) so the `TAG_HEALTHBOX_PAL` entry picks the dark palette of the
+   *current* style when the option is on. This is SG's
+   `LoadBattleInterfacePalettes` change folded into HnS's existing style
+   branch — four lines, no new structure.
+6. `src/battle_interface.c`: add the index constants (as a two-entry table
+   indexed by `optionsNewBattleUI`, per §4.3.1) and the four remap/copy helpers,
+   and route the existing healthbar/status-icon copies through them.
    Cross-check against every `optionsNewBattleUI` branch — there are ~24; each
    one that copies healthbox gfx needs the dark path too.
-5. `src/battle_message.c`, `src/battle_controller_player.c`,
+7. `src/battle_message.c`, `src/battle_controller_player.c`,
    `src/battle_script_commands.c`: apply the text-colour branches. These are
    small and mechanical, but the line numbers will not match SG's — locate by
    function, not by line.
-6. `src/palette.c`: HnS's day/night blending applies to the battle UI palettes.
+8. `src/palette.c`: HnS's day/night blending applies to the battle UI palettes.
    SG excludes the UI edge colour from the blend when dark is on
    (`src/palette.c:1386`). Find the equivalent blend site in HnS
    (`UpdatePalettesWithTime` / `TimeMixBattleSpritePalette` area) and add the
    same exclusion, or the dark UI will be tinted orange at dusk.
-7. Bag: create `graphics/bag/menu_male_dark.pal` and
+9. Bag: create `graphics/bag/menu_male_dark.pal` and
    `graphics/bag/menu_female_dark.pal`. You can start from SG's files but HnS's
    bag art differs (HnS has no `scrolling_bg.bin`, no `key_item_box.png`, and has
    `select_button_hold.png` instead of SG's directional variants) — the palettes
    must match **HnS's** `graphics/bag/menu.png`. Then port the `src/item_menu.c`
    branches. Register the new `.pal` files in `graphics_file_rules.mk` if HnS's
    rules require explicit entries (check — `.pal` often passes through).
-8. Option entry on the `MENU_CUSTOM` page: `MENUITEM_BATTLE_DARK_UI`, two
-   choices `Light` / `Dark`, `ProcessInput_Options_Two`. Place it adjacent to
-   `MENUITEM_BATTLE_NEW_BATTLEUI` so the two UI toggles read as a group.
-9. `src/new_game.c`: default to Light.
+10. Option entry on the `MENU_CUSTOM` page: `MENUITEM_BATTLE_DARK_UI`, two
+    choices `Light` / `Dark`, `ProcessInput_Options_Two`. Place it adjacent to
+    `MENUITEM_BATTLE_NEW_BATTLEUI` so the two UI toggles read as a group.
+11. `src/new_game.c`: default to Light, matching SG (`src/new_game.c:143`). See §6.1.
 
 ### 4.5 Acceptance
 
@@ -522,9 +578,12 @@ the older two-column layout and has none of that** (verified: no
 `PARTY_BOX_EQUAL_COLUMN` anywhere in HnS). So even the "cheap" HGSS/BW skins are
 not a skin swap — they need SG's layout engine ported first.
 
-### 5.2 Two options — the author should choose before work starts
+### 5.2 DECIDED: port the SwSh "Custom" menu (Soulgold's default skin)
 
-**Option A — port the SwSh "Custom" menu (what SG shows by default).**
+The author chose the Sword/Shield-style screen — Soulgold's default, i.e.
+`PARTY_MENU_OPTION_CUSTOM`. The HGSS/BW skins are **not** in scope.
+What that entails:
+
 * Port `src/comfy_anim.c` + `include/comfy_anim.h` (290 + 114 lines; only
   depends on `math_util`, which HnS already has). Low risk.
 * Port `src/swsh_party_menu.c`, `src/data/swsh_party_menu.h`, and
@@ -558,22 +617,18 @@ not a skin swap — they need SG's layout engine ported first.
   (`:2678-2730`), HM-use-without-teaching, and follower removal on Teleport
   (`FieldCallback_PrepareFadeInForTeleport`, `:3981`).
 
-**Option B — port SG's equal-column layout + the HGSS skin only.**
-* Port the `PARTY_BOX_EQUAL_COLUMN` layout data and
-  `BlitBitmapToPartyWindow_Equal` into HnS's `src/party_menu.c`, plus
-  `graphics/party_menu/hgss/` (5 files, 24 KB) re-encoded to LZ77.
-* Add the `PARTY_MENU_STYLE` compile-time switch and, optionally, the runtime
-  dispatch with two skins.
-* Roughly 10–15% of Option A's effort, no new 12k-line file, no comfy anim,
-  no missing-symbol adapters beyond decompression.
-* **Thematically the better fit**: Heart & Soul is an HGSS demake, and the HGSS
-  skin is literally the HGSS party screen.
+**Not in scope:** Soulgold's equal-column layout and the HGSS/BW skins
+(`graphics/party_menu/hgss`, `graphics/party_menu/bw`,
+`src/hgss_party_menu.c`, the `PARTY_MENU_STYLE` compile-time switch). Do not
+port them. They are recorded here only as the documented fallback if the SwSh
+port stalls: they would cost roughly 10–15% of the effort, but they are a
+different feature, not a cheaper version of this one.
 
-**Recommendation: confirm with the author which one they meant before starting.**
-If no answer is available, do Option B first (it is a strict subset of the
-infrastructure Option A needs) and treat Option A as a follow-up.
+**Scope discipline for this phase:** two styles only — HnS-classic (the
+existing `src/party_menu.c`, unchanged) and SwSh. Two entries in the dispatch
+switch, not three.
 
-### 5.3 Ordering within Phase 4 (Option A)
+### 5.3 Ordering within Phase 4
 
 1. Port `comfy_anim` standalone. Build. Commit.
 2. Port `include/party_menu_variant.h` + `src/party_menu_dispatch.c` with
@@ -588,22 +643,27 @@ infrastructure Option A needs) and treat Option A as a follow-up.
 
 ### 5.4 Option storage for the party style
 
-This is the one option where a var may not be enough, because the party menu can
-be reached in contexts where you want the style resolved early. SG stores it in
-`SaveBlock1` with a magic-byte validator:
+Use a free `VAR_` (`VAR_PARTY_MENU_STYLE`) like the other options, **plus SG's
+magic-byte idea adapted to a var**: reserve value 0 as "never chosen" and store
+`style + 1`, so an existing save that has never seen the option is
+distinguishable from one deliberately set to style 0.
 
 ```c
-// SG src/party_menu_dispatch.c:22-38
-if (gSaveBlock1Ptr->optionsPartyMenuStyleMagic == PARTY_MENU_OPTION_SAVE_MAGIC)
-    ... use gSaveBlock1Ptr->optionsPartyMenuStyle ...
-else
-    ... fall back to the default ...
+static u8 GetPartyMenuStyle(void)
+{
+    u16 stored = VarGet(VAR_PARTY_MENU_STYLE);
+
+    if (stored == 0 || stored - 1 >= PARTY_MENU_STYLE_COUNT)
+        return PARTY_MENU_STYLE_DEFAULT;   // see §6.1
+    return stored - 1;
+}
 ```
 
-Copy that pattern exactly if you add the field to `SaveBlock1`: it is what makes
-the change safe for existing saves. `SaveBlock1` has its own
-`STATIC_ASSERT` (`src/save.c:82`) — check headroom before adding.
-A free `VAR_` is still simpler and is the default recommendation.
+SG does the same job with a `SaveBlock1` field plus a separate magic byte
+(`src/party_menu_dispatch.c:22-38`,
+`PARTY_MENU_OPTION_SAVE_MAGIC == 0xA5`). The var-plus-offset form above is
+equivalent, needs no struct change, and therefore cannot disturb existing
+saves. Do not add fields to `SaveBlock1` for this.
 
 ### 5.5 ROM / RAM budget
 
@@ -632,8 +692,9 @@ statics and struct members — filter by hand.)
 ### 5.7 Acceptance
 
 * `make modern` green; memory usage delta recorded and accepted.
-* The existing HnS party menu is reachable and **unchanged** on the default
-  setting.
+* The SwSh menu is what a new game and a pre-change save both get (§6.2), and
+  the classic HnS menu is still reachable and **byte-identical to today** when
+  selected in Options.
 * Every entry point works in the new style: field, in-battle switch, item use,
   Daycare, Move Relearner/Tutor/Deleter, trade, Battle Pyramid held items,
   multi-battle showcase, contest, Teleport/Fly field moves.
@@ -644,7 +705,63 @@ statics and struct members — filter by hand.)
 
 ---
 
-## 6. Cross-cutting rules for the implementer
+## 6. Defaults, and compatibility with existing saves
+
+### 6.1 What each option defaults to
+
+Soulgold's values, taken from `../soulgold/src/new_game.c`:
+
+| Option | SG new-game default | HnS setting |
+|---|---|---|
+| Overworld speed | 1x (`:232-233`) | `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)` |
+| Battle speed | **2x** (`:144`) | `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SCENE_2X)` |
+| Dark UI | Light / off (`:143`) | `VarSet(VAR_DARK_UI, 0)` |
+| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` |
+
+Set all four in `NewGameInitData()` in `src/new_game.c`, alongside the existing
+`gSaveBlock2Ptr->options*` initialisers.
+
+**Also port SG's option carry-over.** SG snapshots the player's current option
+values into a `struct NewGameOptions` before wiping the save and restores them
+afterwards (`../soulgold/src/new_game.c:220-232` and `:305-310`), so starting a
+New Game does not silently reset the player's preferences. Do the same for the
+four new options — it is ~15 lines and it is the behaviour the author asked to
+match.
+
+### 6.2 Existing saves
+
+Every new option lives in a previously-unused `VAR_`, which reads **0** in a
+save made before this work. That is deliberate, and it is what keeps old saves
+compatible: nothing in `SaveBlock1`/`SaveBlock2` moves, so no field is
+misinterpreted and no `STATIC_ASSERT` changes.
+
+Consequence, per option:
+
+* **Overworld speed** — 0 = 1x. Same as the new-game default. No visible change.
+* **Battle speed** — 0 = 1x, whereas a *new* game starts at 2x. This asymmetry
+  is exactly what Soulgold does (its 2x default is set only in
+  `NewGameInitData`, so its own pre-feature saves also load at 1x). Keep it.
+  **Do not add a migration that bumps existing saves to 2x** — silently
+  speeding up a returning player's battles is a worse outcome than the
+  inconsistency, and the option is one menu away.
+* **Dark UI** — 0 = Light. Same as the new-game default. No visible change.
+* **Party menu** — 0 means "never chosen" thanks to the `style + 1` encoding
+  (§5.4), so the fallback in `GetPartyMenuStyle()` decides what a returning
+  player sees. Set `PARTY_MENU_STYLE_DEFAULT` to the SwSh style, matching
+  Soulgold's own fallback (`PARTY_MENU_DEFAULT_OPTION == PARTY_MENU_OPTION_CUSTOM`).
+  Returning players therefore get the new screen and can switch back in
+  Options. If the author later prefers existing saves to keep the classic HnS
+  menu, that is a **one-line change** to the fallback constant — no save
+  migration, no data change.
+
+**Verification before merging any phase:** load a pre-change save in an
+emulator, confirm the player's name, party, badges, bag and playtime are intact
+and that the new options read as 1x / Light, then change each option, save,
+reload and confirm it persisted.
+
+---
+
+## 7. Cross-cutting rules for the implementer
 
 1. **Never copy a line from `../soulgold` without reading the HnS function it is
    going into.** The APIs differ everywhere (§0.1). A clean-looking copy that
@@ -653,8 +770,8 @@ statics and struct members — filter by hand.)
 2. **Build after every step, not every phase.** With no local toolchain, that
    means: push to the branch and let the Phase 0 CI build it. If Phase 0 is not
    landed yet, land it first.
-3. **Do not touch `src/main.c`'s VBlank handler** except in the explicitly
-   labelled, separately-revertable RNG commit (§3.4).
+3. **Do not touch `src/main.c`'s VBlank handler or `VBlankCB_Battle` at all.**
+   The RNG rework is ruled out by decision (§3.4).
 4. **Do not restructure `struct SaveBlock2`.** Use vars (§0.4).
 5. **Do not "fix" the agbcc build** (§0.2). It is out of scope and already
    broken on `main`.
@@ -669,15 +786,14 @@ statics and struct members — filter by hand.)
 
 ---
 
-## 7. Open questions for the author
+## 8. Decisions taken (2026-09-13) — do not re-litigate
 
-1. **Party menu:** Option A (SwSh "Custom") or Option B (HGSS/BW skin)? §5.2.
-2. **Battle RNG:** is it acceptable that battle outcomes differ between speed
-   settings, or should the VBlank RNG be reworked? §3.4.
-3. **Dark UI scope:** battle + Bag only (as in Soulgold), or should it extend to
-   the summary screen / PC / Pokédex? §4.1.
-4. **Dark UI vs `optionsNewBattleUI`:** should Dark be available for both HnS
-   healthbox styles, or only one? §4.3.
-5. **Default values for new saves:** all new options default to off/1x/Light, or
-   should the speed-ups default to 2x as Soulgold does
-   (`../soulgold/src/new_game.c:144`)?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Which party menu | **SwSh "Custom"**, Soulgold's default skin. HGSS/BW out of scope. §5.2 |
+| 2 | Battle RNG differing between speeds | **Acceptable.** Ship without the rework; do not touch the VBlank handlers. §3.4 |
+| 3 | Dark UI scope | **Battle + Bag only**, exactly as Soulgold. No summary/PC/Pokédex. §4.1 |
+| 4 | Dark UI vs the two HnS healthbox styles | **Do it Soulgold's way, applied to both styles.** Two dark `.pal` files, a two-entry constant table, nothing more. No gating, no abstraction. §4.3.1 |
+| 5 | Defaults | **Soulgold's values for new games, existing saves untouched.** §6.1 |
+
+Nothing in this plan is blocked on further input.
