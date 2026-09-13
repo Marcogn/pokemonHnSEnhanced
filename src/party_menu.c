@@ -1,4 +1,10 @@
 #include "global.h"
+// HnS's classic (two-column) party menu implementation. Compiled once, under
+// its own private symbol prefix (see include/party_menu_variant.h) - the
+// unprefixed public API is provided by src/party_menu_dispatch.c, which
+// selects a variant at runtime (see docs/PORT_PLAN_SOULGOLD_FEATURES.md §5).
+#define PARTY_MENU_VARIANT_HNS
+#include "party_menu_variant.h"
 #include "malloc.h"
 #include "battle.h"
 #include "battle_anim.h"
