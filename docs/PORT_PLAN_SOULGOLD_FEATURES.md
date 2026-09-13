@@ -123,17 +123,41 @@ This is the single highest-value item in the whole plan. Land it as its own
 commit **before** any feature work, so every later commit is verified by
 something other than reading.
 
-### 1.2 Record a baseline
+### 1.2 Baseline (recorded — CI run #1, commit `8804466`, head of `main`)
 
-On a clean checkout of `main`, with CI green, record:
+The CI added in §1.1 ran clean on the first try: 871 compiler invocations, 0
+errors, 13 warnings — all of them pre-existing (`src/party_menu.c:5873,5875`,
+`src/pokemon.c:7322,7699,7854`, two `MtSilver_MountainSide` map-data truncation
+warnings), unrelated to this PR's docs-only diff. The linker's
+`--print-memory-usage` output, taken as-is from the job log:
 
-* the linker memory-usage line (ROM / EWRAM / IWRAM used),
-* the ROM size.
+```
+Memory region         Used Size  Region Size  %age Used
+           EWRAM:      261168 B       256 KB     99.63%
+           IWRAM:       26368 B        32 KB     80.47%
+             ROM:    22505416 B        32 MB     67.07%
+```
 
-Append both to `docs/PORT_PLAN_SOULGOLD_FEATURES.md` under a "Baseline" heading,
-or to the PR body. After each phase, compare. EWRAM and IWRAM are the tight
-resources on GBA; ROM is 32 MiB and unlikely to be the binding constraint, but
-Phase 5 adds ~12k lines of code and must be checked.
+i.e. **EWRAM has 976 bytes of headroom, IWRAM has 6400, ROM has ~11 MB.**
+
+**This is the most important number in this document.** ROM is not a
+constraint for anything in this plan. EWRAM is — with 976 bytes free on
+`main` *before any of the four features exist*, this changes §5's risk
+rating from "verify no allocation failure" to "the naive port does not fit,
+and a specific mitigation is mandatory." See §5.5, which now states the
+mitigation. Every phase must re-check this number (the CI artifact reports it
+on every build) before merging, not just Phase 4 — a single careless
+`EWRAM_DATA` global anywhere is enough to overflow it.
+
+Re-measure after each phase lands and update the table below.
+
+| After phase | EWRAM used | EWRAM free | ROM used |
+|---|---|---|---|
+| Baseline (`main`) | 261168 B (99.63%) | 976 B | 22505416 B (67.07%) |
+| 1 — overworld speed | _pending_ | | |
+| 2 — battle speed | _pending_ | | |
+| 3 — dark/light UI | _pending_ | | |
+| 4 — party menu | _pending_ | | |
 
 ### 1.3 Commit hygiene
 
@@ -585,7 +609,9 @@ The author chose the Sword/Shield-style screen — Soulgold's default, i.e.
 What that entails:
 
 * Port `src/comfy_anim.c` + `include/comfy_anim.h` (290 + 114 lines; only
-  depends on `math_util`, which HnS already has). Low risk.
+  depends on `math_util`, which HnS already has). Logic is low risk — **but do
+  not port its static `gComfyAnims` pool as-is; §5.5 has real EWRAM numbers
+  showing the naive port does not fit, and a mandatory heap-allocation change.**
 * Port `src/swsh_party_menu.c`, `src/data/swsh_party_menu.h`, and
   `graphics/party_menu/swsh/`.
 * Port `src/party_menu_dispatch.c` + `include/party_menu_variant.h`, reduced to
@@ -630,7 +656,10 @@ switch, not three.
 
 ### 5.3 Ordering within Phase 4
 
-1. Port `comfy_anim` standalone. Build. Commit.
+1. Port `comfy_anim` standalone, **with `gComfyAnims` heap-allocated from the
+   start, not as a static array** (§5.5's mandatory mitigation — do this now,
+   not as a fix-up after the naive version fails to fit). Build, check EWRAM
+   against §1.2's table. Commit.
 2. Port `include/party_menu_variant.h` + `src/party_menu_dispatch.c` with
    **only one variant** (HnS classic), wired so behaviour is unchanged. Build.
    Commit. This proves the dispatch layer before any new UI exists.
@@ -665,16 +694,79 @@ SG does the same job with a `SaveBlock1` field plus a separate magic byte
 equivalent, needs no struct change, and therefore cannot disturb existing
 saves. Do not add fields to `SaveBlock1` for this.
 
-### 5.5 ROM / RAM budget
+### 5.5 ROM / RAM budget — EWRAM headroom is the blocking constraint, not ROM
 
-`src/swsh_party_menu.c` is ~12k lines. Compare the linker
-`--print-memory-usage` line before and after. The SwSh variant allocates its
-working state on the heap (`sPartyMenuInternal`, `sPartyMenuBoxes`,
-`sPartyBgTilemapBuffer` are `EWRAM_DATA` *pointers*, not buffers), so EWRAM
-growth should be small — but `struct PartyMenuInternal` contains a
-`u16 palBuffer[BG_PLTT_SIZE / 2]` and six `struct ComfyAnim`, so the *heap*
-allocation grows. Verify there is no allocation failure when the party menu is
-opened from inside a battle, which is the tightest heap moment.
+**Read §1.2 before starting this phase.** The baseline build has **976 bytes**
+of free EWRAM (99.63% used) and ~11 MB of free ROM. ROM is a non-issue. EWRAM
+is not something to "verify" at the end — the naive port does not fit, and a
+specific change to SG's design is mandatory before this phase can land.
+
+`src/swsh_party_menu.c`'s *working state* is heap-allocated, correctly:
+`sPartyMenuInternal`, `sPartyMenuBoxes`, `sPartyBgGfxTilemap`,
+`sPartyBgTilemapBuffer`, `sPartyBg3TilemapBuffer` are `EWRAM_DATA` pointers, not
+buffers, so `struct PartyMenuInternal`'s contents (including its
+`u16 palBuffer[BG_PLTT_SIZE / 2]` and six `struct ComfyAnim`) live on the heap
+and cost nothing statically. That part is fine as designed.
+
+**What is not fine: two categories of *static* `EWRAM_DATA` the file adds
+regardless of whether the menu is ever opened.**
+
+1. **`comfy_anim.c`'s own pool:**
+   `EWRAM_DATA struct ComfyAnim gComfyAnims[NUM_COMFY_ANIMS] = {0};`
+   (`../soulgold/src/comfy_anim.c:5`, `NUM_COMFY_ANIMS == 8`,
+   `../soulgold/include/comfy_anim.h:84`). `struct ComfyAnim` is
+   `ComfyAnimConfig` (a tagged union of the easing/spring configs, ~28 bytes
+   plus a tag) + a 4-byte state union + `position`/`velocity`/`delayFrames`/
+   `completed`/`inUse` (5×4 bytes) ≈ **56 bytes each, ~448 bytes for the pool
+   of 8.** That alone is **46% of all remaining EWRAM**, permanently, whether
+   or not the player ever opens a party menu.
+2. **`swsh_party_menu.c`'s ~35 other top-level `static EWRAM_DATA` scalars and
+   small arrays** (sprite/window IDs, saved-state snapshot fields, tilemap
+   pointers not already counted above, `sSelectFrameSpriteIds[7]`,
+   `sMessageWindowSpriteIds[16]`, `sMultiuseWindowSpriteIds[6]`, etc.) — on the
+   order of another **~140–200 bytes**, depending on struct packing.
+
+Combined, that is comfortably **more than the entire 976-byte headroom**,
+before a single line of the ~35 missing-symbol adapters (§5.2) has added
+anything of its own, and before Phases 1–3 have spent any of that headroom
+themselves (they are designed not to — see the "no new static `EWRAM_DATA`"
+rule in §7 — but re-measure after each of them anyway, per §1.2's table).
+
+**Mandatory mitigation: `gComfyAnims` must be heap-allocated, not static.**
+This is a real, scoped change to SG's design, not a suggestion:
+
+* Change `include/comfy_anim.h` / `src/comfy_anim.c` so `gComfyAnims` becomes
+  `EWRAM_DATA struct ComfyAnim *gComfyAnims = NULL;`, allocated with `AllocZeroed`
+  (or the project's equivalent) when the party menu (or whatever else ends up
+  using comfy anims) is entered, and freed when it exits — following the same
+  lifecycle as `sPartyMenuInternal` itself. `GetAvailableComfyAnim()`,
+  `AdvanceComfyAnimations()` and every other function that indexes
+  `gComfyAnims[i]` are unaffected by this change; only the storage class moves.
+  If comfy anims end up used **only** by the party menu (true as of this port —
+  check again if a later feature reuses them), the cleanest home for the
+  pointer and its allocation is inside `struct PartyMenuInternal` itself, which
+  removes the global entirely.
+* For the ~35 smaller statics in `swsh_party_menu.c`: fold as many as
+  reasonably possible into `struct PartyMenuInternal` (heap-allocated already)
+  instead of leaving them as file-level statics. Not all of them can move
+  (some are read from contexts where `sPartyMenuInternal` may already be freed
+  — check each one), but every one that moves is EWRAM given back.
+* After these changes, **re-measure with the real linker output** (§1.2's
+  table) rather than estimating. The arithmetic above is close enough to know
+  the naive port is not viable, not precise enough to certify the fixed
+  version — that requires an actual `make modern` build, which only exists in
+  CI (§0.3).
+
+If, after both mitigations, the build still does not fit: the next lever is
+trimming `swsh_party_menu.c`'s own statics further (e.g. `sMoveWindowIds` /
+`sMoveTypeSpriteIds` are `MAX_MON_MOVES`-sized arrays that could be computed
+per-use instead of cached) — not reducing `NUM_COMFY_ANIMS` below what the UI
+needs (2 for the cursor + up to `PARTY_SIZE` for per-slot animation is the
+actual requirement SG's code encodes, not an arbitrary round number).
+
+Verify there is no allocation failure when the party menu is opened from
+inside a battle, which is the tightest *heap* moment (separate from the EWRAM
+headroom problem above, which exists whether or not the menu is ever opened).
 
 ### 5.6 Regenerating the missing-symbol list
 
@@ -783,6 +875,16 @@ reload and confirm it persisted.
    port the dependency to satisfy one `if`.
 8. Every new user-facing string goes through `_("...")`, not
    `COMPOUND_STRING` (§0.1).
+9. **No new top-level `static EWRAM_DATA` (or non-`static` `EWRAM_DATA`)
+   anywhere in Phases 1–3 without checking §1.2's table first.** The baseline
+   has 976 bytes of free EWRAM (§1.2) — that is not a rounding margin, it is
+   close to nothing. Phases 1–3 are designed in this plan to need none (Phase
+   2's `hasBattleInputStarted` bit goes on the already heap-allocated
+   `BattleStruct`; Phase 3's new data is `const` ROM palettes). If an
+   implementation step seems to need a new static EWRAM byte anywhere in those
+   three phases, that is a signal to stop and re-read this rule, not to add it
+   and move on. Phase 4 (the one phase that does need EWRAM) has its own
+   mandatory mitigation in §5.5 — read it before writing `swsh_party_menu.c`.
 
 ---
 
@@ -797,3 +899,12 @@ reload and confirm it persisted.
 | 5 | Defaults | **Soulgold's values for new games, existing saves untouched.** §6.1 |
 
 Nothing in this plan is blocked on further input.
+
+### 8.1 Confirmed by CI run #1 (2026-09-13) — not a decision, a fact
+
+`main` builds green with `make modern`, and has **976 bytes of free EWRAM**
+(99.63% used) against ~11 MB of free ROM. This is not something the author
+chose; it is what the linker reports on the unmodified project. It changes
+Phase 4 from "large but low-risk" to "large, and the naive port does not fit
+without the heap-allocation change mandated in §5.5." See §1.2 for the full
+table and §7 rule 9 for what this means for Phases 1–3.
