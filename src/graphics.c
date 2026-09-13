@@ -1176,6 +1176,12 @@ const u32 gBagScreenFemale_Pal_Dark[] = INCBIN_U32("graphics/bag/menu_female_dar
 const u32 gBagScreen_Gfx[] = INCBIN_U32("graphics/bag/menu.4bpp.lz");
 const u32 gBagScreen_GfxTileMap[] = INCBIN_U32("graphics/bag/menu.bin.lz");
 
+// Soulgold's starfield background, shown on its own BG behind the bag's
+// foreground UI wherever that UI has transparent (palette index 0) pixels.
+const u32 gBagScrollingBg_Gfx[] = INCBIN_U32("graphics/bag/scrolling_bg.4bpp.lz");
+const u32 gBagScrollingBg_Tilemap[] = INCBIN_U32("graphics/bag/scrolling_bg.bin.lz");
+const u32 gBagScrollingBg_Pal[] = INCBIN_U32("graphics/bag/scrolling_bg.gbapal.lz");
+
 const u32 gBattlePyramidBag_Gfx[]          = INCBIN_U32("graphics/bag/bag_pyramid.4bpp.lz");
 const u32 gBattlePyramidBag_Pal[]          = INCBIN_U32("graphics/bag/bag_pyramid.gbapal.lz"); // female palette is first and male is second.
 const u32 gBattlePyramidBagTilemap[]       = INCBIN_U32("graphics/bag/menu_pyramid.bin.lz");

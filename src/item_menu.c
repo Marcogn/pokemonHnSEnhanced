@@ -266,6 +266,17 @@ static const struct BgTemplate sBgTemplates_ItemMenu[] =
         .priority = 2,
         .baseTile = 0,
     },
+    {
+        // Soulgold's starfield background - own char/map base so it never
+        // touches the existing foreground tileset/tilemap.
+        .bg = 3,
+        .charBaseIndex = 2,
+        .mapBaseIndex = 28,
+        .screenSize = 0,
+        .paletteMode = 0,
+        .priority = 3,
+        .baseTile = 0,
+    },
 };
 
 static const struct ListMenuTemplate sItemListMenu =
@@ -837,15 +848,19 @@ static void BagMenu_InitBGs(void)
 {
     ResetVramOamAndBgCntRegs();
     memset(gBagMenu->tilemapBuffer, 0, sizeof(gBagMenu->tilemapBuffer));
+    memset(gBagMenu->scrollingBgTilemapBuffer, 0, sizeof(gBagMenu->scrollingBgTilemapBuffer));
     ResetBgsAndClearDma3BusyFlags(0);
     InitBgsFromTemplates(0, sBgTemplates_ItemMenu, ARRAY_COUNT(sBgTemplates_ItemMenu));
     SetBgTilemapBuffer(2, gBagMenu->tilemapBuffer);
+    SetBgTilemapBuffer(3, gBagMenu->scrollingBgTilemapBuffer);
     ResetAllBgsCoordinates();
     ScheduleBgCopyTilemapToVram(2);
+    ScheduleBgCopyTilemapToVram(3);
     SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_OBJ_ON | DISPCNT_OBJ_1D_MAP);
     ShowBg(0);
     ShowBg(1);
     ShowBg(2);
+    ShowBg(3);
     SetGpuReg(REG_OFFSET_BLDCNT, 0);
 }
 
@@ -881,6 +896,21 @@ static bool8 LoadBagMenu_Graphics(void)
         break;
     case 4:
         LoadCompressedSpritePalette(&gBagPaletteTable);
+        gBagMenu->graphicsLoadState++;
+        break;
+    case 5:
+        DecompressAndCopyTileDataToVram(3, gBagScrollingBg_Gfx, 0, 0, 0);
+        gBagMenu->graphicsLoadState++;
+        break;
+    case 6:
+        if (FreeTempTileDataBuffersIfPossible() != TRUE)
+        {
+            LZDecompressWram(gBagScrollingBg_Tilemap, gBagMenu->scrollingBgTilemapBuffer);
+            gBagMenu->graphicsLoadState++;
+        }
+        break;
+    case 7:
+        LoadCompressedPalette(gBagScrollingBg_Pal, BG_PLTT_ID(2), PLTT_SIZE_4BPP);
         gBagMenu->graphicsLoadState++;
         break;
     default:

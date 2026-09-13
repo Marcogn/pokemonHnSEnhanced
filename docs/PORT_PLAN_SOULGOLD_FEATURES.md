@@ -887,6 +887,62 @@ reasoning about the numbers again:
 * Verified with `make modern`: 0 errors, 0 new warnings, ROM size decreased
   slightly (removed dead palette data) instead of growing.
 
+### 4.8 Post-release addition — Soulgold's Bag starfield background
+
+The user asked for Soulgold's actual Bag background art, having noticed HnS's
+Bag was a flat color behind the foreground UI where Soulgold shows a
+starfield. Traced instead of guessed:
+
+* Soulgold's Bag uses **4** BGs, not HnS's 3: `sBgTemplates_ItemMenu` has a
+  `.bg = 3` entry (`charBaseIndex = 3`, `mapBaseIndex = 28`, `priority = 3`,
+  the lowest — furthest back) that HnS's own template array never had. There
+  is no per-frame scroll task anywhere in Soulgold's `item_menu.c` despite
+  the name `BAG_MENU_BG_SCROLLING` — it is a static background, not an
+  animation, that shows through wherever a higher-priority BG's tile pixels
+  are palette index 0 (the GBA's native per-tile transparency for regular
+  BGs). Confirmed by rendering both Soulgold's foreground tilemap and this
+  one from raw source (tiles from `menu.png`, tilemap from `.bin`, palette
+  from `.pal`) into actual PNGs before writing any code — the foreground's
+  "empty" areas are bright green (Soulgold's transparency marker colour) and
+  exactly the size/shape of where the starfield tilemap renders a genuine
+  navy sky full of stars.
+* Soulgold's `.bg = 2` and `.bg = 3` share `charBaseIndex = 3` (the same
+  tile graphics, just two different tilemaps), and the starfield only
+  references tile IDs 64–77 of Soulgold's 80-tile `menu.png` (which is
+  128×40 — one row of 16 tiles taller than HnS's 128×32) — the 14 extra
+  tiles HnS's sheet doesn't have. All 1024 tilemap entries use Soulgold's
+  own palette bank 0 (`menu_male.pal` indices 0–15), the same bank as the
+  rest of the Bag chrome.
+* HnS's Bag never had a `.bg = 3` at all, so this could not be a
+  drop-in tilemap copy — porting it needed a new BG. Rather than merging 14
+  more tiles into HnS's existing (already dark-mode-corrected) foreground
+  tileset/tilemap and having to renumber a 1024-entry tilemap by hand, the
+  14 star tiles were extracted into their own standalone 16-tile sheet
+  (`graphics/bag/scrolling_bg.png`, tile IDs remapped 64–77 → 0–13) with
+  their own dedicated palette (`scrolling_bg.pal`, Soulgold's real bank-0
+  colours) and tilemap (`scrolling_bg.bin`, same remap applied, palette
+  nibble forced to a new dedicated bank). This is additive only: HnS's
+  existing foreground BG0/1/2 assets, tile numbering, and the Dark UI bag
+  palette fix in §4.7 are untouched.
+* New `.bg = 3` template added to `sBgTemplates_ItemMenu` with
+  `charBaseIndex = 2` and `mapBaseIndex = 28` — both verified unused
+  anywhere else in the Bag's own template array (HnS only used
+  charBaseIndex 0 and 3, mapBaseIndex 29–31) — and the new palette loads at
+  `BG_PLTT_ID(2)`, also verified free (the Bag's own code only ever touches
+  banks 0–1 for its chrome and 12–15 for shared menu/message windows).
+  `struct BagMenu` gained one more `u8[BG_SCREEN_SIZE]` tilemap buffer —
+  free, since `gBagMenu` is heap-allocated (`AllocZeroed`), not a static
+  `EWRAM_DATA` struct, so this does not touch the project's tight static
+  EWRAM budget (§1.2/§4.6) at all; confirmed by the unchanged EWRAM figure
+  in the verification build below.
+* No dark-mode variant was created for the starfield, matching Soulgold: it
+  never swaps this palette for Dark UI either (only the two chrome banks at
+  `BG_PLTT_ID(0)` get a dark variant) — the sky is already dark enough to
+  read fine under both Light and Dark UI.
+* Verified with `make modern`: 0 errors, 0 new warnings, EWRAM/IWRAM
+  unchanged from §4.7, ROM +728 bytes (new compressed tile/tilemap/palette
+  data only).
+
 ---
 
 ## 5. Phase 4 — Party menu UI
