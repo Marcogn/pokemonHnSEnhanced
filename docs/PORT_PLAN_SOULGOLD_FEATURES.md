@@ -210,7 +210,8 @@ Re-measure after each phase lands and update the table below.
 | 3 — dark/light UI | 261168 B (99.63%, unchanged) | 976 B | 22507816 B (67.08%, +964 B from Phase 2) |
 | 4a — comfy_anim (heap-allocated) | 261172 B (99.63%, +4 B: the `gComfyAnims` pointer itself) | 972 B | 22508968 B (67.08%, +1152 B from Phase 3) |
 | 4b — dispatch layer, HnS-classic only | 261172 B (99.63%, unchanged) | 972 B | 22509912 B (67.08%, +944 B: 65 tiny forwarding functions) |
-| 4c–4f — party menu (remaining steps) | _pending_ | | |
+| 4c — swsh_party_menu.c/.h port, `make modern` clean (0 errors, 0 warnings, 0 undefined references) | 261276 B (99.67%, +104 B from 4b) | 868 B | 22582824 B (67.30%, +72912 B from 4b) |
+| 4d–4f — dispatch wiring, `VAR_PARTY_MENU_STYLE` option, holistic review | _pending_ | | |
 
 ### 1.3 Commit hygiene
 
@@ -1138,6 +1139,116 @@ source, 2026-09-13):**
   match anywhere in `include/` — Rock Climb may not exist as a HM in HnS at
   all; verify before assuming a stub), `PokemonPC_SetReturnToPartyCallback`,
   `TryDecrementMonLevel`.
+
+### 5.6.1 Implementation notes — landed, real deviations from §5.6's list above
+
+`src/swsh_party_menu.c` and `src/data/swsh_party_menu.h` now compile with
+`make modern`: 0 errors, 0 undefined references at link time, 0 warnings.
+Reached iteratively (build → `grep "error:"` → fix the highest-impact cluster
+→ rebuild), going from 610 raw errors after the initial copy down to 0 over
+several sessions. The §5.6 list above was a reasonable prediction; here is
+what was actually true once each item was traced against HnS's real source
+(never assumed from the name alone):
+
+* **`enum CanMoveBeLearned` cannot live in `include/constants/party_menu.h`
+  as a C `enum`.** That header is also pulled into `data/event_scripts.s`
+  through the project's asm preprocessor, which cannot parse `enum { ... }`
+  syntax at all (`bad instruction`, `junk at end of line`). Converted to
+  plain `#define CAN_LEARN_MOVE 0` / etc., matching every other constant in
+  that file — a reminder that *any* addition to a `constants/*.h` header
+  must stay assembler-safe, not just valid C, regardless of what the
+  matching Soulgold header looks like.
+* **`CanLearnTutorMove` must NOT go through the per-variant rename macro**
+  in `party_menu_variant.h`, unlike the other ~64 public functions on that
+  list. It backs a single shared implementation in `party_menu.c` (reading
+  the private `sTutorLearnsets` table from `data/pokemon/tutor_learnsets.h`,
+  which also defines the genuinely-shared `gTutorMoves`) and is called
+  directly by `scrcmd.c` and `pokedex_plus_hgss.c` outside the party menu
+  entirely. Renaming it split the symbol in two (`HnsPartyMenu_...` defined,
+  plain name never emitted) and produced a late link-time-only failure —
+  same failure mode as the `CanItemBeTossed`/`GetSelectedBoxMonFromPcOrParty`
+  class of bug below, just one level removed. Removed from the rename list;
+  `GetTMHMMoves` stays renamed since nothing calls its plain name from
+  outside the dispatch layer.
+* **A second, larger wave of "missing" symbols only surfaces at the link
+  step, after every `grep "error:"` hit is fixed** — exactly the risk flagged
+  in the working notes going into this stretch. An undeclared *function
+  call* (`GetItemEffect(item)`, `CanItemBeTossed(item)`,
+  `TryItemHoldFormChange(mon, slot)`, `FollowerNPCIsBattlePartner()`, …) only
+  produces an implicit-declaration *warning*, compiles anyway assuming an
+  `int`-returning function, and only fails at `arm-none-eabi-ld` with
+  `undefined reference to '...'`. Caught by grepping the linker's own output
+  for `undefined reference`, not by trusting a 0-compile-error build was
+  finished. ~25 distinct symbols fell in this bucket; each was individually
+  traced to one of:
+  * a real HnS function under a different name (`GetItemPocket` →
+    `ItemId_GetPocket`, `GetItemImportance` → `ItemId_GetImportance`,
+    `IsOnPlayerSide(x)` → `GetBattlerSide(x) == B_SIDE_PLAYER`,
+    `DecompressDataWithHeaderWram` → `LZDecompressWram`, confirming §5.6's
+    predictions);
+  * HnS's real, simpler algorithm for the same job, requiring the calling
+    function's body to be rewritten rather than adapted
+    (`GetEvolutionTargetSpecies` takes 3 args in HnS, not Soulgold's 6 with a
+    `CHECK_EVO`/`DO_EVO` mode flag and an output `canStopEvo`; `CanTeachMove`
+    doesn't exist — HnS's real `CanMonLearnTMTutor(mon, item, tutor)` takes
+    an item-or-0 plus a tutor-index-or-0 instead of one pre-resolved move,
+    which changes every caller, not just the callee);
+  * a private table (`sTMHMMoves`, `sMultiBattlePartnersPartyMask`) that
+    only `party_menu.c`'s own translation unit can see, duplicated here
+    under an `sSwsh`-prefixed name using the same `FOREACH_TMHM` generator
+    macro or literal data HnS's own copy uses — never re-derived by hand;
+  * a genuinely absent system, removed rather than stubbed with invented
+    behaviour, per §5.2's rule: `CanItemBeTossed`/`gText_ItemCantBeTossed`
+    (HnS allows tossing any held item unconditionally — confirmed by reading
+    `CursorCb_Toss`, which has no such check at all), the entire
+    Fusion/Form-Change/Rotom-Catalog/Zygarde-Cube display-and-item-use path
+    (`DisplayPartyPokemonDataForFusion`/`ForFormChange`,
+    `SpriteCB_FormChangeIconMosaic`, the `FUSE_MON`/`UNFUSE_MON` scaffolding),
+    the entire Follower NPC path (`PlayerHasFollowerNPC`,
+    `FollowerNPCIsBattlePartner`, `Task_HideFollowerNPCForTeleport` and its
+    `FNPC_*` state machine), `TryItemHoldFormChange` (four call sites),
+    `IsItemInfiniteHold`/`AddHeldItemToBag`'s infinite-hold branch,
+    `DeleteMove`/`DoesMonHaveAnyMoves` (dead code, confirmed unreferenced
+    anywhere including headers, whose only internal call was itself the
+    source of a `ShiftMoveSlot` signature conflict — HnS's real
+    `ShiftMoveSlot` takes `struct Pokemon *`, not `struct BoxPokemon *`);
+  * one dead function invented wholesale and never wired to anything,
+    `ItemUseCB_BattleScript` — confirmed via the built ROM's own `.map` file
+    that nothing referenced it, not even a data table, then deleted;
+  * one real bug rather than a missing symbol:
+    `HandleLoadSpecialPokePic(TRUE, dest, species, pid)` compiled (the first
+    argument silently truncated to a null-ish pointer) because Soulgold's
+    version of that function takes a `bool` first argument where HnS's takes
+    `const struct CompressedSpriteSheet *src` — fixed to
+    `&gMonFrontPicTable[species]`, HnS's real convention for loading a
+    front-facing special pic (confirmed against `contest_util.c`'s identical
+    pattern), not just silenced.
+* `OpenPokedexPlusHGSSAtSpecies` (viewing the selected party mon's Dex entry)
+  has no standalone equivalent: HnS's `DisplayCaughtMonDexPage` only makes
+  sense mid-catch-sequence (it assumes the catch screen's BG/palette state is
+  already loaded), not as a screen you can jump to cold. Ported as "open the
+  regular Pokédex list" (`CB2_OpenPokedexPlusHGSS`) instead of "jump straight
+  to this species' entry" — a real, intentional reduction in fidelity for
+  this one menu entry, not an oversight; recorded here rather than silently
+  losing the distinction.
+* `sFieldMoveCursorCallbacks`' function-pointer column is unavoidably mixed:
+  8 of its 12 entries (`SetUpFieldMove_Cut`/`Flash`/`RockSmash`/`Strength`/
+  `Teleport`/`Dig`/`SoftBoiled`/`SweetScent`) are real, shared, `bool8`
+  overworld field-effect functions from `fldeff.h`, unrelated to the party
+  menu variant system; the other 4 (`Surf`/`Fly`/`Dive`/`Waterfall`) are this
+  variant's own dispatched functions, forced to `bool32` by the public
+  dispatch signature in `party_menu.h`. Kept the table's field `bool8`
+  (matching HnS's real `data/party_menu.h` table and 8 of 12 entries) and
+  added an explicit `(bool8 (*)(void))` cast at the other 4 call sites,
+  rather than changing the shared field-effect functions' real signatures.
+
+None of the above required inventing new game mechanics — every fix is
+either HnS's own real, existing code (read and matched exactly) or a
+straightforward deletion of a system HnS doesn't have, per §5.2. The dead
+code found and removed here (`ItemUseCB_BattleScript`, `DeleteMove`,
+`DoesMonHaveAnyMoves`, the Fusion/Form-Change display path) was Soulgold's
+own; none of it was reachable from the SwSh menu's real cursor options even
+before this port started trimming it.
 
 ### 5.7 Acceptance
 

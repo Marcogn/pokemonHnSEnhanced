@@ -92,7 +92,11 @@
 #define MoveDeleterChooseMoveToForget PARTY_MENU_VARIANT_NAME(MoveDeleterChooseMoveToForget)
 #define ItemUseCB_PokeBall PARTY_MENU_VARIANT_NAME(ItemUseCB_PokeBall)
 #define ItemUseCB_Mints PARTY_MENU_VARIANT_NAME(ItemUseCB_Mints)
-#define CanLearnTutorMove PARTY_MENU_VARIANT_NAME(CanLearnTutorMove)
+// CanLearnTutorMove is NOT renamed: it is a single shared implementation
+// (backed by the private sTutorLearnsets table in
+// data/pokemon/tutor_learnsets.h, included only by party_menu.c) called
+// directly by other systems (scrcmd.c, pokedex_plus_hgss.c) as well as by
+// both party menu variants - see docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.6.
 #define GetTMHMMoves PARTY_MENU_VARIANT_NAME(GetTMHMMoves)
 
 #endif // GUARD_PARTY_MENU_VARIANT_H

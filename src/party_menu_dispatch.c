@@ -9,10 +9,11 @@
 // The SwSh variant and the runtime style option are added in a later commit
 // of this phase (see docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.3).
 //
-// The party menu's shared EWRAM state (gPartyMenu and friends) and
-// gTutorMoves are NOT duplicated here - they stay defined exactly once, in
-// party_menu.c, and both variants will reference that same instance via the
-// existing extern declarations in party_menu.h.
+// The party menu's shared EWRAM state (gPartyMenu and friends),
+// gTutorMoves, and CanLearnTutorMove are NOT duplicated here - they stay
+// defined exactly once, in party_menu.c, and both variants (plus other
+// systems like scrcmd.c) reference that same instance via the existing
+// extern/plain declarations in party_menu.h.
 
 #define HNS_FUNC(name) HnsPartyMenu_ ## name
 
@@ -93,7 +94,6 @@ DISPATCH_VOID(GetNumMovesSelectedMonHas, (void), ())
 DISPATCH_VOID(MoveDeleterChooseMoveToForget, (void), ())
 DISPATCH_VOID(ItemUseCB_PokeBall, (u8 taskId, TaskFunc task), (taskId, task))
 DISPATCH_VOID(ItemUseCB_Mints, (u8 taskId, TaskFunc task), (taskId, task))
-DISPATCH_RET(bool8, CanLearnTutorMove, (u16 species, u8 tutor), (species, tutor))
 DISPATCH_RET(u16, GetTMHMMoves, (u16 position), (position))
 
 #undef DISPATCH_VOID
