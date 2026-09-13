@@ -185,6 +185,7 @@ void NewGameInitData(void)
     bool8 EnableMints = FlagGet(FLAG_MINTS_ENABLED);
     bool8 EnableExtraLegendaries = FlagGet(FLAG_EXTRA_LEGENDARIES);
     bool8 FasterJoy = FlagGet(FLAG_EVEN_FASTER_JOY);
+    u16 OverworldSpeedPrev = VarGet(VAR_OVERWORLD_SPEEDUP);
 
     if (gSaveFileStatus == SAVE_STATUS_EMPTY || gSaveFileStatus == SAVE_STATUS_CORRUPT)
         RtcReset();
@@ -252,6 +253,7 @@ void NewGameInitData(void)
     EnableMints ? FlagSet(FLAG_MINTS_ENABLED) : FlagClear(FLAG_MINTS_ENABLED);
     EnableExtraLegendaries ? FlagSet(FLAG_EXTRA_LEGENDARIES) : FlagClear(FLAG_EXTRA_LEGENDARIES);
     FasterJoy ? FlagSet(FLAG_EVEN_FASTER_JOY) : FlagClear(FLAG_EVEN_FASTER_JOY);
+    VarSet(VAR_OVERWORLD_SPEEDUP, OverworldSpeedPrev);
 
     gSaveBlock1Ptr->versionIdMagic = SAVE_MAGIC_NUM;
     gSaveBlock1Ptr->versionId = SAVE_VERSION;

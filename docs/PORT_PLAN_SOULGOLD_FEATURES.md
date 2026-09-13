@@ -55,11 +55,36 @@ adaptation pass. Budget for this in every phase.
 * `Makefile:426` already passes `--print-memory-usage` to the linker. Capture
   that line before and after every phase (see §1.2).
 
-### 0.3 This container has no ARM toolchain
+### 0.3 No ARM toolchain by default — but it installs cleanly if you need it
 
-`arm-none-eabi-gcc` is absent and `$DEVKITARM` is unset. **You cannot compile
-here.** That makes "do not break the build" a discipline problem, not a CI
-problem. See §1 for the mandatory guardrails that replace a compiler.
+`arm-none-eabi-gcc` is absent and `$DEVKITARM` is unset out of the box, so
+until you check, assume **you cannot compile here.** That is what makes §1's
+CI non-optional rather than a nice-to-have: it is the fallback that makes
+"don't break the build" enforceable when no local compiler exists.
+
+However: this turned out not to be a hard wall. The exact packages the CI
+workflow installs —
+`binutils-arm-none-eabi gcc-arm-none-eabi libnewlib-arm-none-eabi libpng-dev`
+— install via plain `apt-get install` in this same kind of container (verified
+while implementing Phase 1), giving a toolchain that matches the CI runner's
+(`gcc-arm-none-eabi 13.2.1`, confirmed identical version). Once installed,
+`make tools -j$(nproc)` then `make modern -j$(nproc)` build the real ROM
+locally in about a minute, with the exact same `--print-memory-usage` output
+CI reports — which is strictly better than waiting on a CI round-trip for
+every step of a phase, and is how Phase 1's numbers in this document were
+verified before ever pushing.
+
+**Do not assume this persists or generalize it**, though: outbound network
+access is an environment policy, not a project guarantee (see this session's
+own system prompt) — it may be unavailable in a differently-configured
+session or a future one, and even here nothing about the container's state
+carries over between sessions. So: try installing it at the start of a
+session: if it works, build and verify locally before every push, which is
+strictly better than round-tripping through CI for every step; if it doesn't,
+fall back to the CI-only workflow this section originally described, and
+budget for the round-trip. Either way, CI remains the authoritative gate —
+local verification is a faster feedback loop, not a replacement for the green
+check on the PR.
 
 ### 0.4 Save data
 
@@ -126,10 +151,21 @@ something other than reading.
 ### 1.2 Baseline (recorded — CI run #1, commit `8804466`, head of `main`)
 
 The CI added in §1.1 ran clean on the first try: 871 compiler invocations, 0
-errors, 13 warnings — all of them pre-existing (`src/party_menu.c:5873,5875`,
-`src/pokemon.c:7322,7699,7854`, two `MtSilver_MountainSide` map-data truncation
-warnings), unrelated to this PR's docs-only diff. The linker's
-`--print-memory-usage` output, taken as-is from the job log:
+errors. (An earlier version of this section said "13 warnings" — that count
+came from a truncated tail of the CI log and undercounts badly. A full local
+`make modern` on this same commit, done once an ARM toolchain turned out to be
+installable in the authoring container after all, shows **596** warnings, the
+large majority (`~540`) being `libpng` notices — `bKGD: invalid index` /
+`iCCP: known incorrect sRGB profile` — emitted while `gbagfx` converts the
+project's PNG art on every from-scratch build. The rest are the same handful
+of real pre-existing warnings already named here
+(`src/party_menu.c:5873,5875`, `src/pokemon.c:7322,7699,7854`, two
+`MtSilver_MountainSide` map-data truncation warnings, an `-Wattribute-alias`
+pair, an `extern`-and-initialized declaration, two RTC struct-visibility
+notices). All of it is pre-existing and unrelated to this PR's diff — verified
+by diffing a clean-vs-changed local build, not by re-reading the same
+truncated log more carefully.) The linker's `--print-memory-usage` output,
+taken as-is from the job log:
 
 ```
 Memory region         Used Size  Region Size  %age Used
@@ -154,7 +190,7 @@ Re-measure after each phase lands and update the table below.
 | After phase | EWRAM used | EWRAM free | ROM used |
 |---|---|---|---|
 | Baseline (`main`) | 261168 B (99.63%) | 976 B | 22505416 B (67.07%) |
-| 1 — overworld speed | _pending_ | | |
+| 1 — overworld speed | 261168 B (99.63%, unchanged) | 976 B | 22505896 B (67.07%, +480 B) |
 | 2 — battle speed | _pending_ | | |
 | 3 — dark/light UI | _pending_ | | |
 | 4 — party menu | _pending_ | | |
@@ -217,6 +253,16 @@ identical to SG's (verified). The port is nearly mechanical.
    (`src/battle_transition.c:1839, 2697, 2706, 3791`) so transitions are not a
    jarring slow spot. Check HnS's transition functions individually — they are
    not guaranteed to be the same set.
+
+   **Skipped in the Phase 1 implementation.** HnS's `battle_transition.c`
+   turned out structurally unrelated to SG's — different function names
+   throughout, no counterpart at SG's line numbers — so this would not have
+   been the described port but a from-scratch design across roughly 15
+   hand-tuned scanline-effect functions, each already fine-tuned to specific
+   frame counts. Battle transitions run for a second or two; the risk of
+   subtly breaking one of those effects outweighed the benefit for what this
+   plan rates a low-risk phase. Left as a genuine follow-up, not silently
+   dropped.
 
 ### 2.4 Option entry
 
@@ -885,6 +931,15 @@ reload and confirm it persisted.
    three phases, that is a signal to stop and re-read this rule, not to add it
    and move on. Phase 4 (the one phase that does need EWRAM) has its own
    mandatory mitigation in §5.5 — read it before writing `swsh_party_menu.c`.
+10. **If you build locally (§0.3), `git status` before committing — a local
+    build regenerates `include/constants/map_groups.h` from `data/maps/*.json`
+    via the `mapjson` tool, and the regenerated version can drift from what is
+    checked in** (observed while verifying Phase 1: one map's generated macro
+    name differed, plus a debug comment line the tool appends). This is a
+    pre-existing quirk of the project's generated-file setup, unrelated to any
+    feature in this plan. `git checkout -- include/constants/map_groups.h`
+    before every commit that follows a local build, unless you specifically
+    intended to update it (you did not, in any phase this plan describes).
 
 ---
 

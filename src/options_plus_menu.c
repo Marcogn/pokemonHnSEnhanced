@@ -20,6 +20,7 @@
 #include "constants/songs.h"
 #include "event_data.h"
 #include "sound.h"
+#include "overworld.h"
 
 enum
 {
@@ -48,6 +49,7 @@ enum
     MENUITEM_MAIN_UNIT_TYPE,
     //MENUITEM_MAIN_SKIP_INTRO,
     MENUITEM_MAIN_FRAMETYPE,
+    MENUITEM_MAIN_OVERWORLD_SPEED,
     MENUITEM_MAIN_COUNT,
 };
 
@@ -219,6 +221,7 @@ static void DrawChoices_Skip_Intro(int selection, int y);
 static void DrawChoices_LR_Run(int selection, int y);
 static void DrawChoices_Ball_Prompt(int selection, int y);
 static void DrawChoices_Unit_Type(int selection, int y);
+static void DrawChoices_OverworldSpeed(int selection, int y);
 static void DrawChoices_Music(int selection, int y);
 static void DrawChoices_New_Backgrounds(int selection, int y);
 static void DrawChoices_New_BattleUI(int selection, int y);
@@ -272,8 +275,9 @@ struct // MENU_MAIN
     [MENUITEM_CUSTOM_FISHING]               = {DrawChoices_Fishing,          ProcessInput_Options_Two},
     [MENUITEM_MAIN_EVEN_FASTER_JOY]         = {DrawChoices_EvenFasterJoy,    ProcessInput_Options_Two},
     //[MENUITEM_MAIN_SKIP_INTRO]              = {DrawChoices_Skip_Intro,       ProcessInput_Options_Two}, 
-    [MENUITEM_MAIN_UNIT_TYPE]               = {DrawChoices_Unit_Type,        ProcessInput_Options_Two},  
+    [MENUITEM_MAIN_UNIT_TYPE]               = {DrawChoices_Unit_Type,        ProcessInput_Options_Two},
     [MENUITEM_MAIN_FRAMETYPE]               = {DrawChoices_FrameType,        ProcessInput_FrameType},
+    [MENUITEM_MAIN_OVERWORLD_SPEED]         = {DrawChoices_OverworldSpeed,   ProcessInput_Options_Four},
 };
 
 struct // MENU_CUSTOM
@@ -322,6 +326,7 @@ static const u8 sText_OptionSkipIntro[]           = _("SKIP INTRO");
 static const u8 sText_OptionLR_Run[]              = _("RUN PROMPT");
 static const u8 sText_OptionBallPrompt[]          = _("BALL PROMPT");
 static const u8 sText_OptionUnitType[]            = _("UNIT SYSTEM");
+static const u8 sText_OptionOverworldSpeed[]      = _("OW SPEED");
 static const u8 sText_OptionNewBackgrounds[]      = _("BATTLE TERRAIN");
 static const u8 sText_OptionNewBattleUI[]         = _("BATTLE UI");
 static const u8 sText_GenOneRecharge[]           = _("RECHARGE MOVES");
@@ -346,6 +351,7 @@ static const u8 *const sOptionMenuItemsNamesMain[MENUITEM_MAIN_COUNT] =
     //[MENUITEM_MAIN_SKIP_INTRO]          = sText_OptionSkipIntro,
     [MENUITEM_MAIN_UNIT_TYPE]           = sText_OptionUnitType,
     [MENUITEM_MAIN_FRAMETYPE]           = gText_Frame,
+    [MENUITEM_MAIN_OVERWORLD_SPEED]     = sText_OptionOverworldSpeed,
 };
 
 static const u8 *const sOptionMenuItemsNamesCustom[MENUITEM_BATTLE_COUNT] =
@@ -416,6 +422,7 @@ static bool8 CheckConditions(int selection)
         case MENUITEM_MAIN_EVEN_FASTER_JOY:   return TRUE;
         //case MENUITEM_MAIN_SKIP_INTRO:        return TRUE;
         case MENUITEM_MAIN_UNIT_TYPE:         return TRUE;
+        case MENUITEM_MAIN_OVERWORLD_SPEED:   return TRUE;
         }
     case MENU_CUSTOM:
         switch(selection)
@@ -462,6 +469,7 @@ static const u8 sText_Desc_ButtonMode[]         = _("All buttons work as normal.
 static const u8 sText_Desc_ButtonMode_LR[]      = _("On some screens the L and R buttons\nact as left and right.");
 static const u8 sText_Desc_ButtonMode_LA[]      = _("The L button acts as another A\nbutton for one-handed play.");
 static const u8 sText_Desc_FrameType[]          = _("Choose the frame surrounding the\nwindows.");
+static const u8 sText_Desc_OverworldSpeed[]     = _("Overworld movement and animation\nspeed. Hold {L_BUTTON} for 1x.");
 static const u8 sText_Desc_FollowerOn[]            = _("Let the first POKéMON in your\nparty follow you.");
 static const u8 sText_Desc_FollowerOff[]           = _("Walk alone.");
 static const u8 sText_Desc_FollowerLargeOn[]       = _("Enable large {PKMN} followers.\nCan cause graphical issues.");
@@ -490,6 +498,7 @@ static const u8 *const sOptionMenuItemDescriptionsMain[MENUITEM_MAIN_COUNT][3] =
     [MENUITEM_MAIN_BATTLESTYLE] = {sText_Desc_BattleStyle_Shift,    sText_Desc_BattleStyle_Set, sText_Empty},
     [MENUITEM_MAIN_BUTTONMODE]  = {sText_Desc_ButtonMode,           sText_Desc_ButtonMode_LR,   sText_Desc_ButtonMode_LA},
     [MENUITEM_MAIN_FRAMETYPE]   = {sText_Desc_FrameType,            sText_Empty,                sText_Empty},
+    [MENUITEM_MAIN_OVERWORLD_SPEED] = {sText_Desc_OverworldSpeed,   sText_Empty,                sText_Empty},
     [MENUITEM_MAIN_FOLLOWER]    = {sText_Desc_FollowerOn,           sText_Desc_FollowerOff},
     [MENUITEM_MAIN_LARGE_FOLLOWER]    = {sText_Desc_FollowerLargeOn,           sText_Desc_FollowerLargeOff},
     [MENUITEM_MAIN_AUTORUN]     = {sText_Desc_AutorunOn,            sText_Desc_AutorunOff},
@@ -582,6 +591,7 @@ static const u8 *const sOptionMenuItemDescriptionsDisabledMain[MENUITEM_MAIN_COU
     [MENUITEM_MAIN_BATTLESTYLE] = sText_Empty,
     [MENUITEM_MAIN_BUTTONMODE]  = sText_Empty,
     [MENUITEM_MAIN_FRAMETYPE]   = sText_Empty,
+    [MENUITEM_MAIN_OVERWORLD_SPEED] = sText_Empty,
     [MENUITEM_MAIN_FOLLOWER]    = sText_Desc_Disabled_BattleHPBar,
     [MENUITEM_MAIN_LARGE_FOLLOWER]    = sText_Desc_Disabled_BattleHPBar,
     [MENUITEM_MAIN_AUTORUN]     = sText_Empty,
@@ -632,7 +642,8 @@ static const u8 *const OptionTextDescription(void)
         if (!CheckConditions(menuItem))
             return sOptionMenuItemDescriptionsDisabledMain[menuItem];
         selection = sOptions->sel[menuItem];
-        if (menuItem == MENUITEM_MAIN_TEXTSPEED || menuItem == MENUITEM_MAIN_FRAMETYPE)
+        if (menuItem == MENUITEM_MAIN_TEXTSPEED || menuItem == MENUITEM_MAIN_FRAMETYPE
+         || menuItem == MENUITEM_MAIN_OVERWORLD_SPEED)
             selection = 0;
         return sOptionMenuItemDescriptionsMain[menuItem][selection];
     case MENU_CUSTOM:
@@ -872,6 +883,9 @@ void CB2_InitOptionPlusMenu(void)
         sOptions->sel[MENUITEM_MAIN_EVEN_FASTER_JOY]     = gSaveBlock2Ptr->optionsEvenFasterJoy;
         //sOptions->sel[MENUITEM_MAIN_SKIP_INTRO]          = gSaveBlock2Ptr->optionsSkipIntro;
         sOptions->sel[MENUITEM_MAIN_UNIT_TYPE]           = gSaveBlock2Ptr->optionsUnitSystem;
+        sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED]     = VarGet(VAR_OVERWORLD_SPEEDUP);
+        if (sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED] > OPTIONS_OVERWORLD_SPEED_4X)
+            sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED] = OPTIONS_OVERWORLD_SPEED_1X;
 
         sOptions->sel_battle[MENUITEM_BATTLE_FAST_INTRO]        = gSaveBlock2Ptr->optionsFastIntro;
         sOptions->sel_battle[MENUITEM_BATTLE_FAST_BATTLES]      = gSaveBlock2Ptr->optionsFastBattle;
@@ -1112,6 +1126,7 @@ static void Task_OptionMenuSave(u8 taskId)
     gSaveBlock2Ptr->optionsEvenFasterJoy         = sOptions->sel[MENUITEM_MAIN_EVEN_FASTER_JOY];
     //gSaveBlock2Ptr->optionsSkipIntro             = sOptions->sel[MENUITEM_MAIN_SKIP_INTRO];
     gSaveBlock2Ptr->optionsUnitSystem            = sOptions->sel[MENUITEM_MAIN_UNIT_TYPE];
+    VarSet(VAR_OVERWORLD_SPEEDUP, sOptions->sel[MENUITEM_MAIN_OVERWORLD_SPEED]);
 
     gSaveBlock2Ptr->optionsFastIntro        = sOptions->sel_battle[MENUITEM_BATTLE_FAST_INTRO];
     gSaveBlock2Ptr->optionsFastBattle       = sOptions->sel_battle[MENUITEM_BATTLE_FAST_BATTLES];
@@ -1424,6 +1439,17 @@ static void DrawChoices_TextSpeed(int selection, int y)
 {
     bool8 active = CheckConditions(MENUITEM_MAIN_TEXTSPEED);
     DrawChoices_Options_Four(sTextSpeedStrings, selection, y, active);
+}
+
+static const u8 sText_OverworldSpeed1x[] = _("1X");
+static const u8 sText_OverworldSpeed2x[] = _("2X");
+static const u8 sText_OverworldSpeed3x[] = _("3X");
+static const u8 sText_OverworldSpeed4x[] = _("4X");
+static const u8 *const sOverworldSpeedStrings[] = {sText_OverworldSpeed1x, sText_OverworldSpeed2x, sText_OverworldSpeed3x, sText_OverworldSpeed4x};
+static void DrawChoices_OverworldSpeed(int selection, int y)
+{
+    bool8 active = CheckConditions(MENUITEM_MAIN_OVERWORLD_SPEED);
+    DrawChoices_Options_Four(sOverworldSpeedStrings, selection, y, active);
 }
 
 static void DrawChoices_BattleScene(int selection, int y)

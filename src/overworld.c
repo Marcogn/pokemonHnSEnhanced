@@ -1877,12 +1877,47 @@ void CB2_OverworldBasic(void)
     OverworldBasic();
 }
 
+u8 OverworldSpeedup_AdditionalIterations(u16 speed, bool32 overworld)
+{
+    // Hold L to force 1x. Also force 1x while a script has locked player
+    // controls (cutscenes, timed sequences), or when explicitly flagged.
+    if (overworld
+        && (JOY_HELD(L_BUTTON)
+        || FlagGet(FLAG_PREVENT_OVERWORLD_SPEEDUP)))
+    {
+        return OPTIONS_OVERWORLD_SPEED_1X_EXTRA_ITERATIONS;
+    }
+
+    switch (speed)
+    {
+    case OPTIONS_OVERWORLD_SPEED_4X: return OPTIONS_OVERWORLD_SPEED_4X_EXTRA_ITERATIONS;
+    case OPTIONS_OVERWORLD_SPEED_3X: return OPTIONS_OVERWORLD_SPEED_3X_EXTRA_ITERATIONS;
+    case OPTIONS_OVERWORLD_SPEED_2X: return OPTIONS_OVERWORLD_SPEED_2X_EXTRA_ITERATIONS;
+    case OPTIONS_OVERWORLD_SPEED_1X: return OPTIONS_OVERWORLD_SPEED_1X_EXTRA_ITERATIONS;
+    default: return OPTIONS_OVERWORLD_SPEED_1X_EXTRA_ITERATIONS;
+    }
+}
+
 void CB2_Overworld(void)
 {
     bool32 fading = (gPaletteFade.active != 0);
+    u8 extraLoops;
+    u8 loops;
+
     if (fading)
         SetVBlankCallback(NULL);
     OverworldBasic();
+
+    // Only sprite/camera movement is repeated here. Scripts, text and fades
+    // stay at real time; only visible movement speeds up.
+    extraLoops = ArePlayerFieldControlsLocked() ? 0 : OverworldSpeedup_AdditionalIterations(VarGet(VAR_OVERWORLD_SPEEDUP), TRUE);
+    for (loops = 0; loops < extraLoops; loops++)
+    {
+        AnimateSprites();
+        CameraUpdate();
+        UpdateCameraPanning();
+    }
+
     if (fading) {
         SetFieldVBlankCallback();
         return;
