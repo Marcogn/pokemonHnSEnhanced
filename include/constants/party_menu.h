@@ -1,6 +1,9 @@
 #ifndef GUARD_CONSTANTS_PARTY_MENU_H
 #define GUARD_CONSTANTS_PARTY_MENU_H
 
+// PC_MON_CHOSEN added for the SwSh party menu port - see
+// docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.6.
+#define PC_MON_CHOSEN 0xFE
 #define PARTY_NOTHING_CHOSEN 0xFF
 
 #define AILMENT_NONE  0
@@ -84,6 +87,13 @@
 #define PARTY_ACTION_MOVE_TUTOR         12
 #define PARTY_ACTION_MINIGAME           13
 #define PARTY_ACTION_REUSABLE_ITEM      14  // Unused. The only reusable items are handled separately
+// 15-18 added for the SwSh party menu port - see
+// docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.6. PARTY_ACTION_FUSION is unused in
+// practice (no fusion system in HnS); the other three back real code paths.
+#define PARTY_ACTION_SEND_MON_TO_BOX    15
+#define PARTY_ACTION_CHOOSE_FAINTED_MON 16
+#define PARTY_ACTION_MOVE_ITEM          17
+#define PARTY_ACTION_FUSION             18
 
 // IDs for DisplayPartyMenuStdMessage, to display the message at the bottom of the party menu
 #define PARTY_MSG_CHOOSE_MON                0
@@ -113,6 +123,17 @@
 #define PARTY_MSG_DO_WHAT_WITH_ITEM         24
 #define PARTY_MSG_DO_WHAT_WITH_MAIL         25
 #define PARTY_MSG_ALREADY_HOLDING_ONE       26
+// 27-32 added for the SwSh party menu port (src/swsh_party_menu.c) - see
+// docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.6. The appliance/fusion/PC-box
+// features these back are not present in HnS (SWSH_PARTY_MENU_PC_ACCESS is
+// FALSE, matching Soulgold's own default), so these are never shown, but
+// the enum values and message-table entries must still exist to compile.
+#define PARTY_MSG_WHICH_APPLIANCE           27
+#define PARTY_MSG_CHOOSE_SECOND_FUSION      28
+#define PARTY_MSG_NO_POKEMON                29
+#define PARTY_MSG_CHOOSE_MON_FOR_BOX        30
+#define PARTY_MSG_SEND_MON_TO_BOX           31
+#define PARTY_MSG_MOVE_ITEM_WHERE           32
 #define PARTY_MSG_NONE                      127
 
 // IDs for DisplayPartyPokemonDescriptionText, to display a message in the party pokemon's box
@@ -130,9 +151,21 @@
 #define PARTYBOX_DESC_HAVE        11
 #define PARTYBOX_DESC_DONT_HAVE   12
 
-#define SELECTWINDOW_ACTIONS  0
-#define SELECTWINDOW_ITEM     1
-#define SELECTWINDOW_MAIL     2
-#define SELECTWINDOW_MOVES    3
+#define SELECTWINDOW_ACTIONS     0
+#define SELECTWINDOW_ITEM        1
+#define SELECTWINDOW_MAIL        2
+#define SELECTWINDOW_MOVES       3
+// 4-5 added for the SwSh party menu port (dead code - see
+// docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.6, no Rotom Catalog/Zygarde Cube in HnS).
+#define SELECTWINDOW_CATALOG     4
+#define SELECTWINDOW_ZYGARDECUBE 5
+
+// Added for the SwSh party menu port (src/swsh_party_menu.c) - see
+// docs/PORT_PLAN_SOULGOLD_FEATURES.md §5. Plain #defines, not a C enum:
+// this header is also included by assembly (data/event_scripts.s).
+#define CAN_LEARN_MOVE           0
+#define CANNOT_LEARN_MOVE        1
+#define ALREADY_KNOWS_MOVE       2
+#define CANNOT_LEARN_MOVE_IS_EGG 3
 
 #endif // GUARD_CONSTANTS_PARTY_MENU_H
