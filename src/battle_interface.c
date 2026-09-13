@@ -659,24 +659,23 @@ static struct CompressedSpriteSheet GetStatusSummaryBarSpriteSheet(void)
         return (struct CompressedSpriteSheet){ gBattleInterface_BallStatusBarGfxGen3, 0x200, TAG_STATUS_SUMMARY_BAR_TILE };
 }
 
+// Matches Soulgold: sStatusSummaryBarSpritePal/sStatusSummaryBallsSpritePal are
+// unconditional there too (always the light palette) - the Dark UI option
+// never touches the status-summary ball row, only the battler healthboxes.
 static struct SpritePalette GetStatusSummaryBarSpritePal(void)
 {
-    bool8 dark = IsDarkUiEnabled();
-
     if (gSaveBlock2Ptr->optionsNewBattleUI == 1)
-        return (struct SpritePalette){ dark ? gBattleInterface_BallStatusBarPalGen4_Dark : gBattleInterface_BallStatusBarPalGen4, TAG_STATUS_SUMMARY_BAR_PAL };
+        return (struct SpritePalette){ gBattleInterface_BallStatusBarPalGen4, TAG_STATUS_SUMMARY_BAR_PAL };
     else
-        return (struct SpritePalette){ dark ? gBattleInterface_BallStatusBarPalGen3_Dark : gBattleInterface_BallStatusBarPalGen3, TAG_STATUS_SUMMARY_BAR_PAL };
+        return (struct SpritePalette){ gBattleInterface_BallStatusBarPalGen3, TAG_STATUS_SUMMARY_BAR_PAL };
 }
 
 static struct SpritePalette GetStatusSummaryBallsSpritePal(void)
 {
-    bool8 dark = IsDarkUiEnabled();
-
     if (gSaveBlock2Ptr->optionsNewBattleUI == 1)
-        return (struct SpritePalette){ dark ? gBattleInterface_BallDisplayPalGen4_Dark : gBattleInterface_BallDisplayPalGen4, TAG_STATUS_SUMMARY_BALLS_PAL };
+        return (struct SpritePalette){ gBattleInterface_BallDisplayPalGen4, TAG_STATUS_SUMMARY_BALLS_PAL };
     else
-        return (struct SpritePalette){ dark ? gBattleInterface_BallDisplayPalGen3_Dark : gBattleInterface_BallDisplayPalGen3, TAG_STATUS_SUMMARY_BALLS_PAL };
+        return (struct SpritePalette){ gBattleInterface_BallDisplayPalGen3, TAG_STATUS_SUMMARY_BALLS_PAL };
 }
 
 static struct SpriteSheet GetStatusSummaryBallsSpriteSheet(void)

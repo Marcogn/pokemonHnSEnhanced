@@ -116,15 +116,18 @@ static void GetHealthBoxHealthBarPalettes(struct SpritePalette out[2])
 {
     bool8 dark = IsDarkUiEnabled();
 
+    // Matches Soulgold: only the healthbox frame (TAG_HEALTHBOX_PAL) gets a dark
+    // variant. The healthbar/HP-EXP gauge (TAG_HEALTHBAR_PAL) has no dark
+    // counterpart in Soulgold and always uses the light palette there too.
     if (gSaveBlock2Ptr->optionsNewBattleUI == 1)
     {
         out[0] = (struct SpritePalette){ dark ? gBattleInterface_BallStatusBarPalGen4_Dark : gBattleInterface_BallStatusBarPalGen4, TAG_HEALTHBOX_PAL };
-        out[1] = (struct SpritePalette){ dark ? gBattleInterface_BallDisplayPalGen4_Dark : gBattleInterface_BallDisplayPalGen4, TAG_HEALTHBAR_PAL };
+        out[1] = (struct SpritePalette){ gBattleInterface_BallDisplayPalGen4, TAG_HEALTHBAR_PAL };
     }
     else
     {
         out[0] = (struct SpritePalette){ dark ? gBattleInterface_BallStatusBarPalGen3_Dark : gBattleInterface_BallStatusBarPalGen3, TAG_HEALTHBOX_PAL };
-        out[1] = (struct SpritePalette){ dark ? gBattleInterface_BallDisplayPalGen3_Dark : gBattleInterface_BallDisplayPalGen3, TAG_HEALTHBAR_PAL };
+        out[1] = (struct SpritePalette){ gBattleInterface_BallDisplayPalGen3, TAG_HEALTHBAR_PAL };
     }
 }
 
