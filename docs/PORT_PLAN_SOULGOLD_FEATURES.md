@@ -208,7 +208,8 @@ Re-measure after each phase lands and update the table below.
 | 1 — overworld speed | 261168 B (99.63%, unchanged) | 976 B | 22505896 B (67.07%, +480 B) |
 | 2 — battle speed | 261168 B (99.63%, unchanged) | 976 B | 22506852 B (67.08%, +956 B from Phase 1) |
 | 3 — dark/light UI | 261168 B (99.63%, unchanged) | 976 B | 22507816 B (67.08%, +964 B from Phase 2) |
-| 4 — party menu | _pending_ | | |
+| 4a — comfy_anim (heap-allocated) | 261172 B (99.63%, +4 B: the `gComfyAnims` pointer itself) | 972 B | 22508968 B (67.08%, +1152 B from Phase 3) |
+| 4b–4f — party menu (remaining steps) | _pending_ | | |
 
 ### 1.3 Commit hygiene
 
