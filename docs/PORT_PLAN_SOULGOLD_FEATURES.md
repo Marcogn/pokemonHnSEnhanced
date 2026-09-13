@@ -1043,6 +1043,102 @@ comm -23 /tmp/swsh_calls.txt /tmp/hns_syms.txt
 (It reports ~86 names, including a handful of false positives from local
 statics and struct members — filter by hand.)
 
+**Correction, found while starting to land this phase:** the script above
+undercounts local statics — `swsh_party_menu.c` defines ~523 functions of its
+own (private helpers, `Task_*`, `CursorCb_*`, `SpriteCB_*`, etc.), and a naive
+`comm` against only HnS's headers reports all of them as "missing" too (543
+raw hits), since they're privately defined, not in any header. Subtracting
+`swsh_party_menu.c`'s own self-defined functions (extracted the same way as
+the `hns_syms` list, from the real function bodies rather than declarations)
+gets back down to a manageable, accurate **76** real gaps — close to the
+original ~86 estimate, confirming the estimate was sound; the discrepancy
+was in the script's filtering, not the underlying analysis. Re-run as:
+
+```sh
+# after the two commands above, also build a self-defined list and subtract it:
+# (extract every function actually defined — static or not — in swsh_party_menu.c
+# itself, the same regex-based approach used in §5.6, then:)
+comm -23 /tmp/swsh_calls.txt /tmp/hns_syms.txt > /tmp/missing.txt
+comm -23 /tmp/missing.txt /tmp/swsh_self_defined.txt > /tmp/missing_real.txt
+```
+
+Also broaden `hns_syms.txt` to `find include gflib -name '*.h' | xargs cat`
+(recursive), not just `include/*.h` — the flat glob misses `include/gba/*.h`
+and other subdirectories, producing a few more false "missing" hits (e.g.
+`BLDALPHA_BLEND`, which HnS already has in `include/gba/io_reg.h`, identical
+to Soulgold's).
+
+**The real 76, categorized by resolution (verified against HnS's current
+source, 2026-09-13):**
+
+* **Noise — not real symbols, ignore:** `blitFunc`, `fromSlot`, `item1`,
+  `item2`, `hwords`, `npcs` (local variables/parameters the regex
+  false-matched). `memcpy`, `memset` (libc, always available, just not
+  declared in a project header the script scans).
+* **Trivial (§5.2's own bucket):** `COMPOUND_STRING`, `Vector`, `YES`.
+* **Raw-field/array adapters — HnS uses direct struct/array access instead of
+  expansion-style getters, confirmed by reading the real fields:**
+  `GetMoveName` → `gMoveNames[move]` (`include/data.h:164`);
+  `GetMovePP`, presumably `GetSpeciesAbility` → `gBaseStats[species].abilities[i]`
+  (`include/pokemon.h:332`, field confirmed, exact getter still to write);
+  `GetItemPocket`/`GetItemEffect`/`GetItemHoldEffectParam`/`GetItemImportance`/
+  `GetItemSecondaryId`/`GetItemFieldFunc` → `gItems[item].pocket` /
+  `.holdEffect` / `.holdEffectParam` / `.importance` / `.secondaryId` /
+  `.fieldUseFunc` (`include/item.h:15-22`, all fields confirmed present);
+  `GetItemTMHMMoveId` → likely `ItemIdToBattleMoveId` (already dispatched,
+  §5.3 step 2) or `sTMHMMoves[]`, to confirm when writing the adapter;
+  `IsMoveHM` → HnS's own `IsMoveHm` (party_menu.h, case difference only);
+  `AddHeldItemToBag`/`RemoveHeldItemFromBag` → likely thin wrappers over
+  `AddBagItem`/`RemoveBagItem` (`include/item.h:49-50`, confirmed present);
+  `IsOnPlayerSide` → `GetBattlerSide(battler) == B_SIDE_PLAYER`
+  (`include/battle_anim.h:155`, `include/battle.h:16-17`, confirmed present);
+  `GetSelectedBoxMonFromPcOrParty` → some combination of
+  `StorageGetCurrentBox` (`include/pokemon_storage_system.h:41`, confirmed)
+  and the existing party selection state — exact shape still to trace.
+* **Confirmed HnS has an equivalent under a different name:**
+  `GetCurrentLevelCap` → `GetCurrentPartyLevelCap()`
+  (`include/tx_randomizer_and_challenges.h:106`, HnS's own nuzlocke/challenges
+  system) — `GetCurrentEVCap`/`GetCurrentExpCapType` likely have siblings in
+  the same header, to confirm.
+* **Confirmed genuinely absent — HnS has no such system at all (stub per
+  §5.2's rule, do not invent):** every `FollowerNPC*`/`PlayerHasFollowerNPC`/
+  `RefreshFollowingPokemon` symbol (`include/follower_npc.h` does not exist in
+  HnS — confirmed by direct file check, not just a grep miss);
+  `GetFormChangeTargetSpecies`/`TryFormChange`/`CanChangeMonPokeball`
+  (no `GetFormSpeciesId` or any form-change infrastructure found anywhere in
+  `include/`); `OpenPokedexPlusHGSSAtSpecies` (HnS's
+  `src/pokedex_plus_hgss.c` exists — check for the right entry point rather
+  than assuming absence, unlike the form-change case); pokerus display
+  (`ShouldPokemonShowActivePokerus`) — HnS's `include/pokemon.h` does
+  reference pokerus fields, so this one may resolve to a raw-field adapter
+  once traced, not a stub — do not assume "absent" without checking, per
+  the standing rule (§7 rule 11's lesson generalizes beyond just `VAR_`s).
+* **Still to trace when writing the actual adapters (not yet resolved,
+  listed here so the next session does not re-derive the raw list from
+  scratch):** `CanBoxMonRelearnMoves`, `CanBoxMonRelearnAnyMove`,
+  `CanLearnTeachableMove`, `CanItemBeTossed`, `CannotUseItemsInBattle`,
+  `CreateMonIcon2`, `CreateMonIconIsEgg`, `CurrentBattlePyramidLocation`,
+  `DecompressDataWithHeaderWram` (→ `LZDecompressWram`/`Vram`, per §5.2 —
+  mechanical, just needs every call site updated, not a new function),
+  `DisplayPartyPokemonDataForMoveTutorOrEvolutionItem` (HnS has this exact
+  name but as a `static` function private to `src/party_menu.c` — cannot be
+  called from `swsh_party_menu.c` directly; needs its own SwSh-side
+  reimplementation, not a call-through adapter), `FieldMove_GetMoveId`,
+  `FieldMove_GetPartyMsgID`, `SetUpFieldMove` (HnS's classic party menu has
+  its field-move logic written inline and differently structured — per
+  §5.2's last bullet, the field-move special-casing at
+  `src/party_menu.c:2678-2730` needs to be traced and reproduced, not
+  assumed to map 1:1 onto Soulgold's refactored `field_move.h` shape),
+  `GET_BASE_SPECIES_ID` (needs `GetFormSpeciesId` first, which does not
+  exist — likely stub to `speciesId` unchanged, pending the form-change
+  stub decision above), `GetFontIdToFit`, `GetSurfablePokemonPartySlot`,
+  `LoadSpritePaletteWithTag` (HnS's `gflib/sprite.h` only has
+  `LoadSpritePalette`, no tag-lookup variant — check `LoadCompressedSpriteSheet`-
+  adjacent helpers or write one), `MetatileBehavior_IsRockClimbable` (no
+  match anywhere in `include/` — Rock Climb may not exist as a HM in HnS at
+  all; verify before assuming a stub), `PokemonPC_SetReturnToPartyCallback`,
+  `TryDecrementMonLevel`.
+
 ### 5.7 Acceptance
 
 * `make modern` green; memory usage delta recorded and accepted.
