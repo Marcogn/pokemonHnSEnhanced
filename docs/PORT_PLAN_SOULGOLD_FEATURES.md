@@ -1033,23 +1033,23 @@ call stack both live in low IWRAM, and corrupting either would produce
 exactly this symptom - a hardware exception whose default handler falls
 through to something that looks like the game restarting).
 
-**Open discrepancy, not resolved**: forcing `VAR_PARTY_MENU_STYLE` to the
-classic value (1) by writing it directly into the loaded save's memory, on
-the exact save that crashes with SwSh, *also* crashed in this session's
-headless-mGBA testing - even though the disassembly of the compiled
-dispatcher (`CB2_PartyMenuFromStartMenu` in `party_menu_dispatch.c`) is
-unambiguous: for a stored value of 1 it computes `PARTY_MENU_STYLE_HNS` and
-branches to `HnsPartyMenu_CB2_PartyMenuFromStartMenu`, never touching SwSh's
-code at all. Live single-instruction tracing to directly confirm which
-branch actually executed did not manage to re-locate the dispatcher's own
-address before the session's time ran out, so this is unresolved: it could
-mean there's a second, real bug that also breaks (or bypasses) the classic
-path on this specific save, or it could be an artifact of this session's
-test harness (a stale `gSaveBlock1Ptr`-relocation assumption, or a poke that
-didn't survive to the moment `VarGet` actually runs). **Before trusting
-"classic works" as a blanket statement, verify it fresh** - ideally by
-reproducing via the in-game Options menu on real hardware/a real emulator
-rather than a memory poke, since that removes this whole class of doubt.
+**Discrepancy above, now resolved**: forcing `VAR_PARTY_MENU_STYLE` to the
+classic value (1) by writing it directly into the loaded save's memory *also*
+crashed in this session's headless-mGBA testing, contradicting the
+disassembly (which is unambiguous - stored value 1 branches straight to
+`HnsPartyMenu_CB2_PartyMenuFromStartMenu`, never touching SwSh). The user
+confirmed on real hardware/their own emulator, via the real in-game Options
+menu (not a memory poke) on the build with `PARTY_MENU_STYLE_DEFAULT`
+switched to `PARTY_MENU_STYLE_HNS` (commit `cbfa7d0f`): **classic works,
+only SwSh crashes.** So the dispatcher is fine; the discrepancy was this
+session's own test harness (a raw memory poke into `gSaveBlock1Ptr->vars` is
+not equivalent to going through the real Options menu flow - most likely the
+poke either didn't survive to the moment `VarGet` ran, or the emulator
+instance under test wasn't the one actually reflecting the poke). Trust
+"classic works, SwSh doesn't" as confirmed fact; don't waste time
+re-litigating it. The still-open task is exactly what §5.8's main text
+describes: root-causing SwSh's own crash, starting from bisecting inside
+`DecompressGraphics()`'s switch.
 
 ---
 
