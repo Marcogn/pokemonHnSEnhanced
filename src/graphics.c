@@ -351,10 +351,12 @@ const u32 gUnusedTilemap_BasicFrame[] = INCBIN_U32("graphics/unused/basic_frame.
 // Battle Interface
 
 const u16 gBattleInterface_BallStatusBarPalGen4[] = INCBIN_U16("graphics/battle_interface/ball_status_bar.gbapal");
+const u16 gBattleInterface_BallStatusBarPalGen4_Dark[] = INCBIN_U16("graphics/battle_interface/ball_status_bar_dark.gbapal");
 
 const u16 gBattleInterface_BallDisplayPalGen4[] = INCBIN_U16("graphics/battle_interface/ball_display.gbapal");
 
 const u16 gBattleInterface_BallStatusBarPalGen3[] = INCBIN_U16("graphics/battle_interface/ball_status_bargen3.gbapal");
+const u16 gBattleInterface_BallStatusBarPalGen3_Dark[] = INCBIN_U16("graphics/battle_interface/ball_status_bargen3_dark.gbapal");
 
 const u16 gBattleInterface_BallDisplayPalGen3[] = INCBIN_U16("graphics/battle_interface/ball_displaygen3.gbapal");
 
@@ -987,6 +989,7 @@ const u32 gBattleArenaJudgmentSymbolsGfx[] = INCBIN_U32("graphics/battle_frontie
 const u32 gBattleArenaJudgmentSymbolsPalette[] = INCBIN_U32("graphics/battle_frontier/arena_judgment_symbols.gbapal.lz");
 
 const u32 gBattleWindowTextPalette[] = INCBIN_U32("graphics/battle_interface/text.gbapal.lz");
+const u32 gBattleWindowTextPalette_Dark[] = INCBIN_U32("graphics/battle_interface/text_dark.gbapal.lz");
 const u16 gPPTextPalette[] = INCBIN_U16("graphics/battle_interface/text_pp.gbapal");
 
 const u16 gTilesetAnims_BattleDomePals0_0[] = INCBIN_U16("graphics/battle_frontier/dome_anim1.gbapal");
@@ -1165,7 +1168,9 @@ const u32 gBagFemaleTiles[] = INCBIN_U32("graphics/bag/bag_female.4bpp.lz");
 const u32 gBagPalette[] = INCBIN_U32("graphics/bag/bag.gbapal.lz");
 
 const u32 gBagScreenMale_Pal[] = INCBIN_U32("graphics/bag/menu_male.gbapal.lz");
+const u32 gBagScreenMale_Pal_Dark[] = INCBIN_U32("graphics/bag/menu_male_dark.gbapal.lz");
 const u32 gBagScreenFemale_Pal[] = INCBIN_U32("graphics/bag/menu_female.gbapal.lz");
+const u32 gBagScreenFemale_Pal_Dark[] = INCBIN_U32("graphics/bag/menu_female_dark.gbapal.lz");
 
 const u32 gBagScreen_Gfx[] = INCBIN_U32("graphics/bag/menu.4bpp.lz");
 const u32 gBagScreen_GfxTileMap[] = INCBIN_U32("graphics/bag/menu.bin.lz");

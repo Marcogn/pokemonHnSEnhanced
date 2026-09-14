@@ -190,6 +190,7 @@ void NewGameInitData(void)
     u16 OverworldSpeedPrev = VarGet(VAR_OVERWORLD_SPEEDUP);
     u16 BattleSpeedPrev = VarGet(VAR_BATTLE_SPEED);
     u16 PartyMenuStylePrev = VarGet(VAR_PARTY_MENU_STYLE);
+    u16 DarkUiPrev = VarGet(VAR_DARK_UI);
 
     if (BattleSpeedPrev >= OPTIONS_BATTLE_SPEED_COUNT)
         BattleSpeedPrev = OPTIONS_BATTLE_SPEED_2X;
@@ -265,6 +266,7 @@ void NewGameInitData(void)
     VarSet(VAR_OVERWORLD_SPEEDUP, OverworldSpeedPrev);
     VarSet(VAR_BATTLE_SPEED, BattleSpeedPrev);
     VarSet(VAR_PARTY_MENU_STYLE, PartyMenuStylePrev);
+    VarSet(VAR_DARK_UI, DarkUiPrev);
 
     gSaveBlock1Ptr->versionIdMagic = SAVE_MAGIC_NUM;
     gSaveBlock1Ptr->versionId = SAVE_VERSION;
