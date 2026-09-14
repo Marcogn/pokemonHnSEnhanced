@@ -2,6 +2,7 @@
 #include "battle.h"
 #include "battle_message.h"
 #include "battle_anim.h"
+#include "battle_bg.h"
 #include "battle_ai_script_commands.h"
 #include "battle_scripts.h"
 #include "item.h"
@@ -6824,20 +6825,28 @@ static void Cmd_drawlvlupbox(void)
     }
 }
 
+static const u8 sLevelUpWindowTextColors[][3] =
+{
+    [FALSE] = {TEXT_DYNAMIC_COLOR_5, TEXT_DYNAMIC_COLOR_4, TEXT_DYNAMIC_COLOR_6},
+    [TRUE]  = {BATTLE_WINDOW_DARK_BG_PAL_INDEX, BATTLE_WINDOW_DARK_FG_PAL_INDEX, BATTLE_WINDOW_DARK_SHADOW_PAL_INDEX},
+};
+
 static void DrawLevelUpWindow1(void)
 {
     u16 currStats[NUM_STATS];
+    const u8 *colors = sLevelUpWindowTextColors[IsDarkUiEnabled()];
 
     GetMonLevelUpWindowStats(&gPlayerParty[gBattleStruct->expGetterMonId], currStats);
-    DrawLevelUpWindowPg1(B_WIN_LEVEL_UP_BOX, gBattleResources->beforeLvlUp->stats, currStats, TEXT_DYNAMIC_COLOR_5, TEXT_DYNAMIC_COLOR_4, TEXT_DYNAMIC_COLOR_6);
+    DrawLevelUpWindowPg1(B_WIN_LEVEL_UP_BOX, gBattleResources->beforeLvlUp->stats, currStats, colors[0], colors[1], colors[2]);
 }
 
 static void DrawLevelUpWindow2(void)
 {
     u16 currStats[NUM_STATS];
+    const u8 *colors = sLevelUpWindowTextColors[IsDarkUiEnabled()];
 
     GetMonLevelUpWindowStats(&gPlayerParty[gBattleStruct->expGetterMonId], currStats);
-    DrawLevelUpWindowPg2(B_WIN_LEVEL_UP_BOX, currStats, TEXT_DYNAMIC_COLOR_5, TEXT_DYNAMIC_COLOR_4, TEXT_DYNAMIC_COLOR_6);
+    DrawLevelUpWindowPg2(B_WIN_LEVEL_UP_BOX, currStats, colors[0], colors[1], colors[2]);
 }
 
 static void InitLevelUpBanner(void)
@@ -11119,6 +11128,12 @@ void BattleCreateYesNoCursorAt(u8 cursorPosition)
     src[0] = 1;
     src[1] = 2;
 
+    if (IsDarkUiEnabled())
+    {
+        src[0] |= BATTLE_COMMAND_PAL_NUM << 12;
+        src[1] |= BATTLE_COMMAND_PAL_NUM << 12;
+    }
+
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 0x19, 9 + (2 * cursorPosition), 1, 2, 0x11);
     CopyBgTilemapBufferToVram(0);
 }
@@ -11126,8 +11141,16 @@ void BattleCreateYesNoCursorAt(u8 cursorPosition)
 void BattleDestroyYesNoCursorAt(u8 cursorPosition)
 {
     u16 src[2];
-    src[0] = 0x1016;
-    src[1] = 0x1016;
+    if (IsDarkUiEnabled())
+    {
+        src[0] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+        src[1] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+    }
+    else
+    {
+        src[0] = 0x1016;
+        src[1] = 0x1016;
+    }
 
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 0x19, 9 + (2 * cursorPosition), 1, 2, 0x11);
     CopyBgTilemapBufferToVram(0);

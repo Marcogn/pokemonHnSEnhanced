@@ -883,6 +883,75 @@ reasoning about the numbers again:
 * Verified with `make modern`: 0 errors, 0 new warnings, ROM size decreased
   slightly (removed dead palette data) instead of growing.
 
+
+### 4.8 Faithful re-port (2026-09-14) — what transfers from Soulgold and what does not
+
+The Dark UI was re-ported against Soulgold line by line and then verified in
+mGBA (`VAR_DARK_UI` toggled from the in-game Options menu and, for the
+screenshots, poked directly into `gSaveBlock1Ptr->vars[]`). Result: **the
+control flow ports verbatim, the palette *indices* do not.**
+
+Ported verbatim from Soulgold, unchanged:
+
+* `include/battle_bg.h`: `BATTLE_COMMAND_PAL_NUM 13`,
+  `BATTLE_WINDOW_DARK_BG_PAL_INDEX 8`, `_FG_ 14`, `_SHADOW_ 13`.
+* `src/battle_bg.c`: `sBattleMessageTextPalette`, `sDarkBattleCommandPalette`,
+  `sDarkBattleUiBgColor/TextColor/TextShadowColor`, the four window templates
+  moved off `paletteNum = 0` onto slots 12/13, and the whole of
+  `LoadBattleMenuWindowGfx` including its per-index `LoadPalette` overrides.
+* `src/battle_controller_player.c`: the four move/action cursor sites
+  (`... |= BATTLE_COMMAND_PAL_NUM << 12`, destroy uses
+  `(BATTLE_COMMAND_PAL_NUM << 12) | 0x16`).
+* `src/battle_script_commands.c`: `sLevelUpWindowTextColors` and the yes/no
+  cursor pair. (`BattleCreate/DestroyPostCatchMenuCursorAt` and
+  `...CatchOrNotCursorAt` have no HnS counterpart — omitted, not forgotten.)
+* `src/battle_message.c`: `IsDarkBattleCommandWindow` + the
+  `FillWindowPixelBuffer`/text-colour override in `BattlePutTextOnWindow`.
+  `B_CATCH_OR_NOT` / `B_WIN_POST_CATCH_MENU` omitted for the same reason.
+* `src/item_menu.c`: all six dark-Bag palettes, `PrepareDarkBagHmIconGfx`,
+  `COLORID_TMHM_INFO_DARK`, and the five call sites.
+
+Deliberately **not** ported, with reasons:
+
+* `src/palette.c` — `TimeMixBattleBgPalette` is expansion DNS code; HnS has no
+  such function.
+* `src/battle_interface.c` — `IsDarkHealthbox`, `RemapHealthbarGfxIndexes`,
+  `CopyHealthbarGfx`, `CopyStatusIconGfx`. These exist in Soulgold only
+  because its `dark_healthbox.gbapal` repurposes palette entries 1/3 (used by
+  the healthbar gfx) and ships status-icon art authored in *dark* indices.
+  HnS' healthbox art is different (and doubled: Gen 3 / Gen 4 skins), its
+  status icons are light-authored, and its bar colours do not collide.
+  Probing palette RAM live confirmed no remap is needed.
+
+**The one thing that does not transfer: which palette index is the window
+body.** Soulgold's battle textbox uses index 15 for the message-box fill, so
+overriding `BG_PLTT_ID(0) + 15` is enough there. Live probing showed HnS' own
+`textbox.gbapal` does the same for the message box — good — but *not* for the
+Bag, where the item-list panel is BG index 9 and its frame index 10. A literal
+port therefore leaves the Bag's list panel cream-coloured. The fix is at the
+asset level, in HnS' own `graphics/bag/menu_{male,female}_dark.pal`:
+index 9 -> `40 40 40` (panel body), index 10 -> `189 156 90` (gold frame),
+index 26 -> `40 40 40`.
+
+Same class of problem on the healthbox: HnS draws the mon name, level and HP
+numbers with sprite-palette **index 1**, which the dark healthbox palettes had
+set to `12 12 12` — near-black text on a near-black box. Fixed by setting
+index 1 to `251 251 251` in both `ball_status_bar_dark.pal` and
+`ball_status_bargen3_dark.pal`.
+
+Also reverted from the first attempt: `gBattleTextboxPalette_Dark` (a whole
+second textbox palette) is gone. Soulgold always loads the light
+`gBattleTextboxPalette` and only overrides individual indices; now HnS does
+too, and the asset and its `extern` were deleted.
+
+Method note, worth reusing: to find which palette index paints a given region,
+write saturated marker colours into `gPlttBufferFaded` **and**
+`gPlttBufferUnfaded` (BG base `0x0201cf7c` / `0x0201cb7c` in the current
+build; OBJ starts `+0x200`), run three frames, screenshot. One run identifies
+every index at once. `gSaveBlock1Ptr->vars[]` is at SaveBlock1 **+0x1490** in
+this build — *not* the `/*0x139C*/` comment in `include/global.h`, which is
+stale; derive it by diffing memory around an in-game option toggle.
+
 ---
 
 ## 5. Phase 4 — Party menu UI

@@ -2146,6 +2146,8 @@ static void DrawChoices_PartyMenuStyle(int selection, int y)
 
     DrawOptionMenuChoice(sText_PartyMenuStyleHns, 104, y, styles[0], active);
     DrawOptionMenuChoice(sText_PartyMenuStyleSwsh, GetStringRightAlignXOffset(1, sText_PartyMenuStyleSwsh, 198), y, styles[1], active);
+}
+
 static const u8 sText_UiLight[] = _("LIGHT");
 static const u8 sText_UiDark[]  = _("DARK");
 

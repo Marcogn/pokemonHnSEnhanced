@@ -3,6 +3,7 @@
 #include "battle.h"
 #include "battle_anim.h"
 #include "battle_arena.h"
+#include "battle_bg.h"
 #include "battle_controllers.h"
 #include "battle_dome.h"
 #include "battle_interface.h"
@@ -1851,6 +1852,12 @@ static void MoveSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
     src[0] = baseTileNum + 1;
     src[1] = baseTileNum + 2;
 
+    if (IsDarkUiEnabled())
+    {
+        src[0] |= BATTLE_COMMAND_PAL_NUM << 12;
+        src[1] |= BATTLE_COMMAND_PAL_NUM << 12;
+    }
+
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 9 * (cursorPosition & 1) + 1, 55 + (cursorPosition & 2), 1, 2, 0x11);
     CopyBgTilemapBufferToVram(0);
 }
@@ -1858,8 +1865,16 @@ static void MoveSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
 static void MoveSelectionDestroyCursorAt(u8 cursorPosition)
 {
     u16 src[2];
-    src[0] = 0x1016;
-    src[1] = 0x1016;
+    if (IsDarkUiEnabled())
+    {
+        src[0] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+        src[1] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+    }
+    else
+    {
+        src[0] = 0x1016;
+        src[1] = 0x1016;
+    }
 
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 9 * (cursorPosition & 1) + 1, 55 + (cursorPosition & 2), 1, 2, 0x11);
     CopyBgTilemapBufferToVram(0);
@@ -1871,6 +1886,12 @@ void ActionSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
     src[0] = 1;
     src[1] = 2;
 
+    if (IsDarkUiEnabled())
+    {
+        src[0] |= BATTLE_COMMAND_PAL_NUM << 12;
+        src[1] |= BATTLE_COMMAND_PAL_NUM << 12;
+    }
+
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 7 * (cursorPosition & 1) + 16, 35 + (cursorPosition & 2), 1, 2, 0x11);
     CopyBgTilemapBufferToVram(0);
 }
@@ -1878,8 +1899,16 @@ void ActionSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
 void ActionSelectionDestroyCursorAt(u8 cursorPosition)
 {
     u16 src[2];
-    src[0] = 0x1016;
-    src[1] = 0x1016;
+    if (IsDarkUiEnabled())
+    {
+        src[0] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+        src[1] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+    }
+    else
+    {
+        src[0] = 0x1016;
+        src[1] = 0x1016;
+    }
 
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 7 * (cursorPosition & 1) + 16, 35 + (cursorPosition & 2), 1, 2, 0x11);
     CopyBgTilemapBufferToVram(0);
