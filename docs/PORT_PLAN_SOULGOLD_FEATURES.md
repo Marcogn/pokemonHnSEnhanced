@@ -960,6 +960,90 @@ statics and struct members — filter by hand.)
 * Followers are restored correctly after Teleport and after a warp.
 * Switching the option and re-opening the menu takes effect without a reset.
 
+### 5.8 RESOLVED (2026-09-14): SwSh crashed on open — NULL sprite callbacks
+
+**Root cause: seven of the SwSh `SpriteTemplate`s omit `.callback` (and some
+also omit `.anims` / `.affineAnims`), which is harmless on
+pokeemerald-expansion but fatal on HnS's base.**
+
+`CreateSpriteAt` in pokeemerald-expansion (`../soulgold/src/sprite.c`)
+substitutes defaults for missing template fields:
+
+```c
+sprite->anims       = template->anims       ? template->anims       : gDummySpriteAnimTable;
+sprite->affineAnims = template->affineAnims ? template->affineAnims : gDummySpriteAffineAnimTable;
+sprite->callback    = template->callback    ? template->callback    : SpriteCallbackDummy;
+```
+
+HnS's `gflib/sprite.c` assigns them straight through, with no fallbacks. So a
+template that leaves `.callback` unset produces a sprite whose callback is
+NULL, and `AnimateSprites` — identical in both projects — calls it
+unconditionally on the very next frame:
+
+```
+AnimateSprites+0x4c:  ldr r3, [r6, #28]   ; r3 = sprite->callback  (NULL)
+                      bl  _call_via_r3    ; "bx r3"  ->  PC = 0
+```
+
+`bx` to 0 executes the BIOS's ARM reset vector as Thumb, which faults to the
+undefined-instruction vector (0x00000004) and ends up back at the cartridge
+entry point (0x08000000) — i.e. the console appears to "reset to the boot
+screen", exactly the reported symptom. It reproduces 100% of the time because
+the hover-cursor sprite is created during menu setup.
+
+**Fix**: set `.anims` / `.affineAnims` / `.callback` explicitly on every
+SpriteTemplate in `src/data/swsh_party_menu.h`, using the same defaults
+expansion would have substituted (`gDummySpriteAnimTable`,
+`gDummySpriteAffineAnimTable`, `SpriteCallbackDummy`). Minimal blast radius —
+only the ported data changes, no shared engine code is touched. A note above
+the first template records the constraint for anyone adding templates later.
+
+**Correction to an earlier diagnosis in this document's history:** a previous
+session concluded the crash was a hardware *Prefetch Abort* inside a `CpuSet`
+BIOS call. **That was wrong**, and worth recording so nobody repeats it. The
+"evidence" was a trace showing `PC = 0x0000000C` right after `CpuSet`. But
+`CpuSet` is just `svc 11`, and on ARM the SWI vector is at 0x00000008, which
+*reads as 0x0C* because of the +4 instruction-pipeline offset. **Every BIOS
+call in the game passes through that value**, so treating `pc < 0x20` as a
+fault signature produced a false positive on essentially any frame. The
+correct, unambiguous reset signature is `PC` entering the ROM entry region
+(`0x08000000`–`0x080000C0`); detecting only that leads straight to the real
+call chain above in a single trace.
+
+Also disproved along the way, so they need not be re-investigated: the heap is
+healthy at the moment of the crash (peak 65144 of 114672 bytes across 25
+blocks, every block's magic intact, no overflow past the end into `gSprites`,
+largest free block ~49 KB — no exhaustion and no fragmentation); every
+compressed asset's declared decompressed size matches its destination buffer
+exactly; and the port itself is faithful to Soulgold — `ShowPartyMenu`,
+`InitPartyMenu`, `AllocPartyMenuBg`, `DecompressGraphics`,
+`InitPartyMenuWindows`, `LoadPartyMenuWindows`, `LoadPartyMenuBoxes` and
+`ResetPartyMenu` are byte-identical to the originals apart from the deliberate
+`.smol`→`.lz` asset re-encode and the heap-allocated `gComfyAnims`.
+
+
+### 5.9 Pokédex action: ported the "open at species" entry point
+
+The port had reduced `CB2_OpenPartyPokedex` to a bare `CB2_OpenPokedexPlusHGSS()`,
+so the Pokédex action opened at the top of the list and returned to the field
+instead of opening that mon's page and coming back to the party menu.
+
+Soulgold gets this from `OpenPokedexPlusHGSSAtSpecies(species, callback)`, which
+HnS's `pokedex_plus_hgss.c` did not have. Ported it, minimally: four EWRAM
+statics (~12 bytes), a `TrySelectPokedexListDexNum()` helper, the entry point
+itself, and three hooks — select the entry in `LoadPokedexListPage`'s PAGE_MAIN
+branch, jump to the info screen in `Task_OpenPokedexMainPage`, honour the return
+callback in `Task_ClosePokedex`. All of it is inert unless
+`OpenPokedexPlusHGSSAtSpecies` is called, so the normal Pokédex path is
+unchanged.
+
+Checked at the same time, and **not** broken: the HM / field-move path. The SwSh
+menu builds its action list and dispatches to `CursorCb_FieldMove` exactly as
+`party_menu.c` does, and both read the same shared `sFieldMoveCursorCallbacks`
+table in `src/data/party_menu.h`. FLASH showing up for a low-level starter is
+HnS's own "HMs overwrite" challenge option (slot 1 may use Fly/Flash when the HM
+is in the bag), identical in both menus.
+
 ---
 
 ## 6. Defaults, and compatibility with existing saves

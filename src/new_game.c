@@ -126,6 +126,7 @@ static void SetDefaultOptions(void)
     gSaveBlock2Ptr->optionsNewBattleUI= 0;
     gSaveBlock2Ptr->optionsGenOneRecharge= 0;
     VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X); //HnS
+    VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_DEFAULT + 1); //HnS
 }
 
 static void ClearPokedexFlags(void)
@@ -188,9 +189,12 @@ void NewGameInitData(void)
     bool8 FasterJoy = FlagGet(FLAG_EVEN_FASTER_JOY);
     u16 OverworldSpeedPrev = VarGet(VAR_OVERWORLD_SPEEDUP);
     u16 BattleSpeedPrev = VarGet(VAR_BATTLE_SPEED);
+    u16 PartyMenuStylePrev = VarGet(VAR_PARTY_MENU_STYLE);
 
     if (BattleSpeedPrev >= OPTIONS_BATTLE_SPEED_COUNT)
         BattleSpeedPrev = OPTIONS_BATTLE_SPEED_2X;
+    if (PartyMenuStylePrev == 0 || PartyMenuStylePrev - 1 >= PARTY_MENU_STYLE_COUNT)
+        PartyMenuStylePrev = PARTY_MENU_STYLE_DEFAULT + 1;
 
     if (gSaveFileStatus == SAVE_STATUS_EMPTY || gSaveFileStatus == SAVE_STATUS_CORRUPT)
         RtcReset();
@@ -260,6 +264,7 @@ void NewGameInitData(void)
     FasterJoy ? FlagSet(FLAG_EVEN_FASTER_JOY) : FlagClear(FLAG_EVEN_FASTER_JOY);
     VarSet(VAR_OVERWORLD_SPEEDUP, OverworldSpeedPrev);
     VarSet(VAR_BATTLE_SPEED, BattleSpeedPrev);
+    VarSet(VAR_PARTY_MENU_STYLE, PartyMenuStylePrev);
 
     gSaveBlock1Ptr->versionIdMagic = SAVE_MAGIC_NUM;
     gSaveBlock1Ptr->versionId = SAVE_VERSION;
