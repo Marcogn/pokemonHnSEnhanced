@@ -712,6 +712,7 @@ static void CursorCb_Cancel1(u8);
 static void CursorCb_Item(u8);
 static void CursorCb_Pokedex(u8);
 static void CB2_OpenPartyPokedex(void);
+static void CB2_ReturnToPartyMenuFromPokedex(void);
 static void CursorCb_Give(u8);
 static void CursorCb_TakeItem(u8);
 static void CursorCb_MoveItem(u8);
@@ -4733,7 +4734,15 @@ static void CursorCb_Pokedex(u8 taskId)
 // docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.6.
 static void CB2_OpenPartyPokedex(void)
 {
-    CB2_OpenPokedexPlusHGSS();
+    u16 species = GetMonData(&gPlayerParty[gPartyMenu.slotId], MON_DATA_SPECIES);
+
+    OpenPokedexPlusHGSSAtSpecies(species, CB2_ReturnToPartyMenuFromPokedex);
+}
+
+static void CB2_ReturnToPartyMenuFromPokedex(void)
+{
+    gPaletteFade.bufferTransferDisabled = TRUE;
+    InitPartyMenu(gPartyMenu.menuType, KEEP_PARTY_LAYOUT, gPartyMenu.action, TRUE, PARTY_MSG_DO_WHAT_WITH_MON, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
 }
 
 static void CursorCb_Give(u8 taskId)

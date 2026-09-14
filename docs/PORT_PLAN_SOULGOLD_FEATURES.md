@@ -1022,6 +1022,28 @@ exactly; and the port itself is faithful to Soulgold — `ShowPartyMenu`,
 `.smol`→`.lz` asset re-encode and the heap-allocated `gComfyAnims`.
 
 
+### 5.9 Pokédex action: ported the "open at species" entry point
+
+The port had reduced `CB2_OpenPartyPokedex` to a bare `CB2_OpenPokedexPlusHGSS()`,
+so the Pokédex action opened at the top of the list and returned to the field
+instead of opening that mon's page and coming back to the party menu.
+
+Soulgold gets this from `OpenPokedexPlusHGSSAtSpecies(species, callback)`, which
+HnS's `pokedex_plus_hgss.c` did not have. Ported it, minimally: four EWRAM
+statics (~12 bytes), a `TrySelectPokedexListDexNum()` helper, the entry point
+itself, and three hooks — select the entry in `LoadPokedexListPage`'s PAGE_MAIN
+branch, jump to the info screen in `Task_OpenPokedexMainPage`, honour the return
+callback in `Task_ClosePokedex`. All of it is inert unless
+`OpenPokedexPlusHGSSAtSpecies` is called, so the normal Pokédex path is
+unchanged.
+
+Checked at the same time, and **not** broken: the HM / field-move path. The SwSh
+menu builds its action list and dispatches to `CursorCb_FieldMove` exactly as
+`party_menu.c` does, and both read the same shared `sFieldMoveCursorCallbacks`
+table in `src/data/party_menu.h`. FLASH showing up for a low-level starter is
+HnS's own "HMs overwrite" challenge option (slot 1 may use Fly/Flash when the HM
+is in the bag), identical in both menus.
+
 ---
 
 ## 6. Defaults, and compatibility with existing saves

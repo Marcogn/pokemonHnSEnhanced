@@ -169,6 +169,13 @@ static const u8 sText_TenDashes2[] = _("----------");
 static EWRAM_DATA struct PokedexView *sPokedexView = NULL;
 static EWRAM_DATA u16 sLastSelectedPokemon = 0;
 static EWRAM_DATA u8 sPokeBallRotation = 0;
+// Set by OpenPokedexPlusHGSSAtSpecies to open the dex straight on one mon's
+// info page and return to the caller's screen afterwards, instead of opening
+// at the top of the list and returning to the field.
+static EWRAM_DATA MainCallback sPokedexReturnCallback = NULL;
+static EWRAM_DATA u16 sPokedexOpenDexNum = 0;
+static EWRAM_DATA u16 sPokedexOpenSpecies = SPECIES_NONE;
+static EWRAM_DATA bool8 sPokedexOpenAtInfoScreen = FALSE;
 static EWRAM_DATA struct PokedexListItem *sPokedexListItem = NULL;
 //Pokedex Plus HGSS_Ui
 #ifndef BATTLE_ENGINE
@@ -2057,6 +2064,39 @@ static const struct WindowTemplate sSearchMenu_WindowTemplate[] =
 //*        MAIN                      *
 //*                                  *
 //************************************
+// Selects the dex list entry for dexNum, so the list opens already scrolled to
+// it. Returns FALSE when the entry isn't in the current list (wrong dex mode,
+// filtered out, ...), in which case the caller should fall back to the list.
+static bool8 TrySelectPokedexListDexNum(u16 dexNum)
+{
+    u16 i;
+
+    for (i = 0; i < sPokedexView->pokemonListCount; i++)
+    {
+        if (sPokedexView->pokedexList[i].dexNum == dexNum)
+        {
+            sPokedexView->selectedPokemon = i;
+            sPokedexView->pokeBallRotation = POKEBALL_ROTATION_TOP;
+            sLastSelectedPokemon = i;
+            sPokeBallRotation = POKEBALL_ROTATION_TOP;
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+// Opens the Pokédex directly on species' info page, returning to callback when
+// the player backs out. Used by the party menu's Pokédex action.
+void OpenPokedexPlusHGSSAtSpecies(u16 species, MainCallback callback)
+{
+    sPokedexReturnCallback = callback;
+    sPokedexOpenDexNum = SpeciesToNationalPokedexNum(species);
+    sPokedexOpenSpecies = species;
+    sPokedexOpenAtInfoScreen = TRUE;
+    SetMainCallback2(CB2_OpenPokedexPlusHGSS);
+}
+
 void CB2_OpenPokedexPlusHGSS(void)
 {
     switch (gMain.state)
@@ -2189,7 +2229,29 @@ void Task_OpenPokedexMainPage(u8 taskId)
     sPokedexView->formSpecies = 0;
     #endif
     if (LoadPokedexListPage(PAGE_MAIN))
-        gTasks[taskId].func = Task_HandlePokedexInput;
+    {
+        // Opened from the party menu on a specific mon: go straight to its info
+        // page, skipping the list. Only if it's actually been seen - an unseen
+        // entry has no page to show.
+        if (sPokedexOpenAtInfoScreen && sPokedexView->pokedexList[sPokedexView->selectedPokemon].seen)
+        {
+            sPokedexOpenAtInfoScreen = FALSE;
+            sPokedexOpenSpecies = SPECIES_NONE;
+            TryDestroyStatBars();
+            UpdateSelectedMonSpriteId();
+            BeginNormalPaletteFade(~(1 << (gSprites[sPokedexView->selectedMonSpriteId].oam.paletteNum + 16)), 0, 0, 0x10, RGB_BLACK);
+            gSprites[sPokedexView->selectedMonSpriteId].callback = SpriteCB_MoveMonForInfoScreen;
+            gTasks[taskId].func = Task_OpenInfoScreenAfterMonMovement;
+            PlaySE(SE_PIN);
+            FreeWindowAndBgBuffers();
+        }
+        else
+        {
+            sPokedexOpenAtInfoScreen = FALSE;
+            sPokedexOpenSpecies = SPECIES_NONE;
+            gTasks[taskId].func = Task_HandlePokedexInput;
+        }
+    }
 }
 
 #define tLoadScreenTaskId data[0]
@@ -2367,12 +2429,18 @@ static void Task_ClosePokedex(u8 taskId)
         if (!IsNationalPokedexEnabled())
             gSaveBlock2Ptr->pokedex.mode = DEX_MODE_HOENN;
         gSaveBlock2Ptr->pokedex.order = sPokedexView->dexOrder;
+        MainCallback callback = sPokedexReturnCallback != NULL ? sPokedexReturnCallback : CB2_ReturnToFieldWithOpenMenu;
+
         ClearMonSprites();
         FreeWindowAndBgBuffers();
         DestroyTask(taskId);
-        SetMainCallback2(CB2_ReturnToFieldWithOpenMenu);
+        SetMainCallback2(callback);
         m4aMPlayVolumeControl(&gMPlayInfo_BGM, TRACKS_ALL, 0x100);
         Free(sPokedexView);
+        sPokedexReturnCallback = NULL;
+        sPokedexOpenDexNum = 0;
+        sPokedexOpenSpecies = SPECIES_NONE;
+        sPokedexOpenAtInfoScreen = FALSE;
     }
 }
 
@@ -2464,7 +2532,15 @@ static bool8 LoadPokedexListPage(u8 page)
         break;
     case 3:
         if (page == PAGE_MAIN)
+        {
             CreatePokedexList(sPokedexView->dexMode, sPokedexView->dexOrder);
+            if (sPokedexOpenDexNum != 0)
+            {
+                if (!TrySelectPokedexListDexNum(sPokedexOpenDexNum))
+                    sPokedexOpenAtInfoScreen = FALSE;
+                sPokedexOpenDexNum = 0;
+            }
+        }
         if (sPokedexView->originalSearchSelectionNum != 0)
         {
             sPokedexListItem->dexNum = sPokedexView->originalSearchSelectionNum;
