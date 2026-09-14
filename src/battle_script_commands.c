@@ -11130,8 +11130,8 @@ void BattleCreateYesNoCursorAt(u8 cursorPosition)
 
     if (IsDarkUiEnabled())
     {
-        src[0] |= BATTLE_COMMAND_PAL_NUM << 12;
-        src[1] |= BATTLE_COMMAND_PAL_NUM << 12;
+        src[0] |= BATTLE_CURSOR_PAL_NUM << 12;
+        src[1] |= BATTLE_CURSOR_PAL_NUM << 12;
     }
 
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 0x19, 9 + (2 * cursorPosition), 1, 2, 0x11);
@@ -11143,8 +11143,8 @@ void BattleDestroyYesNoCursorAt(u8 cursorPosition)
     u16 src[2];
     if (IsDarkUiEnabled())
     {
-        src[0] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
-        src[1] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+        src[0] = (BATTLE_CURSOR_PAL_NUM << 12) | 0x16;
+        src[1] = (BATTLE_CURSOR_PAL_NUM << 12) | 0x16;
     }
     else
     {

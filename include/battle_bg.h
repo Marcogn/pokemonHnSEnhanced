@@ -7,6 +7,11 @@
 // window, so the dark UI can recolour them without disturbing the shared
 // textbox palette. Ported from Soulgold (../soulgold/include/battle_bg.h).
 #define BATTLE_COMMAND_PAL_NUM          13
+// Soulgold draws the selection cursor out of BATTLE_COMMAND_PAL_NUM. HnS cannot:
+// its cursor tiles use entry 1 as their background, and entry 1 of the command
+// palette is already the "What will X do?" prompt's text colour. The cursor gets
+// its own slot instead - 11 is free for the whole battle.
+#define BATTLE_CURSOR_PAL_NUM           11
 // Soulgold keeps DARK_BATTLE_UI_BG_COLOR private to src/battle_bg.c. HnS needs
 // it in battle_controller_player.c too, to repaint the move-category icon's
 // backdrop, so it lives here instead.

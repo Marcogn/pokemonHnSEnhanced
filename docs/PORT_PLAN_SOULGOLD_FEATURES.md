@@ -987,6 +987,44 @@ To force night in the harness, run mGBA under a TZ that puts local time in the
 night window, e.g. `TZ=Pacific/Kiritimati`; check `gTimeOfDay` (`0x030037ce`,
 0 = night).
 
+### 4.10 The healthbox skin matters — test BOTH (2026-09-14)
+
+The round above was tested only with `optionsNewBattleUI == 0` (Gen 3
+healthboxes) and looked clean. A playtest on **Gen 4** showed a stark white box
+border and a white block where the selection cursor should be. Both are the
+same index collision, and both are skin-specific, so **every dark-UI change has
+to be checked on both healthbox skins.**
+
+* **Healthbox text vs. border.** `AddTextPrinterAndCreateWindowOnHealthbox`
+  prints with `color[1] = 1`. In the *Gen 3* art entry 1 is text only (the box
+  borders on 7/8), so `251 251 251` there is correct. In the *Gen 4* art entry 1
+  is text **and** the outer border, so the same value turned the border white.
+  The Gen 4 dark palette now puts the border back on `12 12 12` (Soulgold's own
+  value) and moves the text to entry 5 — spare in that skin, and the same entry
+  Soulgold frees in `dark_healthbox.gbapal`. `HEALTHBOX_DARK_TEXT_PAL_INDEX`
+  selects it, only when the dark UI and the Gen 4 skin are both on.
+* **Selection cursor.** Soulgold draws the cursor out of
+  `BATTLE_COMMAND_PAL_NUM`. HnS cannot: its cursor tiles (BG0 tiles 1 and 2) use
+  entry 1 as the *tile background*, and entry 1 of the command palette is
+  already the "What will X do?" prompt's text colour — one of them always
+  loses. The first attempt at this (dark entry 1) duly fixed the cursor and
+  blanked the prompt. The cursor now has its own slot,
+  `BATTLE_CURSOR_PAL_NUM 11` (free for the whole battle, verified by dumping all
+  16 BG palettes mid-battle), with 1 = background, 7 = arrow edge, 9 = arrow
+  body, 14 = the erase tile 0x16.
+* **Bag list and description text.** `WIN_ITEM_LIST` uses BG palette 1 and the
+  list menu draws with `cursorPal = 1` / `cursorShadowPal = 3`, i.e. palette
+  entries 17 and 19. The dark palette had 17 = `0 0 0` and 19 = `128 128 120`,
+  so every glyph on the Bag screen was a black fill with a light outline —
+  legible on the cream panel, invisible on the dark one. Swapped:
+  17 = `251 251 251`, 19 = `8 8 8`.
+
+Not changed, and worth recording because it was asked about: the battle text
+sits close to the window edge in light mode too. `git diff main` shows no
+window geometry (`tilemapLeft/Top`, `width/height`) or text placement
+(`.x/.y`, letter/line spacing, font) touched anywhere in this branch — that
+layout is HnS' own and predates the dark UI.
+
 ---
 
 ## 5. Phase 4 — Party menu UI

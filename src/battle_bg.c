@@ -71,6 +71,17 @@ static const u16 sDarkBattleCommandPalette[] =
     [15] = DARK_BATTLE_UI_BG_COLOR,
 };
 
+// Entries read out of VRAM (BG0 char base 0): the cursor is tiles 1 and 2, whose
+// pixels are 1 for the tile background, 9 for the arrow body and 7 for its
+// lower-right edge; tile 0x16, which erases a cursor, is solid 14.
+static const u16 sDarkBattleCursorPalette[16] =
+{
+    [1]  = DARK_BATTLE_UI_BG_COLOR,
+    [7]  = RGB(18, 18, 18),
+    [9]  = RGB_WHITE,
+    [14] = DARK_BATTLE_UI_BG_COLOR,
+};
+
 static const u16 sDarkBattleUiBgColor = DARK_BATTLE_UI_BG_COLOR;
 static const u16 sDarkBattleTextColor = RGB_WHITE;
 static const u16 sDarkBattleTextShadowColor = RGB(1, 1, 1);
@@ -982,6 +993,7 @@ void LoadBattleMenuWindowGfx(void)
     if (IsDarkUiEnabled())
     {
         LoadPalette(sDarkBattleCommandPalette, BG_PLTT_ID(BATTLE_COMMAND_PAL_NUM), PLTT_SIZE_4BPP);
+        LoadPalette(sDarkBattleCursorPalette, BG_PLTT_ID(BATTLE_CURSOR_PAL_NUM), PLTT_SIZE_4BPP);
         LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(0) + 15, PLTT_SIZEOF(1));
         LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(1) + 14, PLTT_SIZEOF(1));
         LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(5) + BATTLE_WINDOW_DARK_BG_PAL_INDEX, PLTT_SIZEOF(1));

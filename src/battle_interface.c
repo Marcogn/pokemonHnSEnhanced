@@ -203,6 +203,8 @@ static void Debug_TestHealthBar_Helper(struct TestingBar *, s32 *, u16 *);
 static void SpriteCB_LastUsedBall(struct Sprite *);
 static void SpriteCB_LastUsedBallWin(struct Sprite *);
 
+#define HEALTHBOX_DARK_TEXT_PAL_INDEX 5
+
 static const struct OamData sOamData_64x32 =
 {
     .y = 0,
@@ -2679,7 +2681,16 @@ static u8 *AddTextPrinterAndCreateWindowOnHealthbox(const u8 *str, u32 x, u32 y,
     FillWindowPixelBuffer(winId, PIXEL_FILL(bgColor));
 
     color[0] = bgColor;
-    color[1] = 1;
+    // Palette entry 1 is the text colour in both healthbox skins, but in the Gen 4
+    // art it is also the box's outer border. Making it light so the text reads on
+    // the dark box turns that border stark white, so the Gen 4 dark theme prints
+    // on entry 5 instead - spare in that skin, and the same entry Soulgold frees
+    // up in its own dark healthbox palette. The Gen 3 art borders on 7/8, so
+    // entry 1 there is text only and stays as it is.
+    if (IsDarkUiEnabled() && gSaveBlock2Ptr->optionsNewBattleUI == 1)
+        color[1] = HEALTHBOX_DARK_TEXT_PAL_INDEX;
+    else
+        color[1] = 1;
     if(gSaveBlock2Ptr->optionsNewBattleUI==1)
     {
         color[2] = 4;

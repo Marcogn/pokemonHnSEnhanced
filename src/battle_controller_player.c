@@ -1855,8 +1855,8 @@ static void MoveSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
 
     if (IsDarkUiEnabled())
     {
-        src[0] |= BATTLE_COMMAND_PAL_NUM << 12;
-        src[1] |= BATTLE_COMMAND_PAL_NUM << 12;
+        src[0] |= BATTLE_CURSOR_PAL_NUM << 12;
+        src[1] |= BATTLE_CURSOR_PAL_NUM << 12;
     }
 
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 9 * (cursorPosition & 1) + 1, 55 + (cursorPosition & 2), 1, 2, 0x11);
@@ -1868,8 +1868,8 @@ static void MoveSelectionDestroyCursorAt(u8 cursorPosition)
     u16 src[2];
     if (IsDarkUiEnabled())
     {
-        src[0] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
-        src[1] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+        src[0] = (BATTLE_CURSOR_PAL_NUM << 12) | 0x16;
+        src[1] = (BATTLE_CURSOR_PAL_NUM << 12) | 0x16;
     }
     else
     {
@@ -1889,8 +1889,8 @@ void ActionSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
 
     if (IsDarkUiEnabled())
     {
-        src[0] |= BATTLE_COMMAND_PAL_NUM << 12;
-        src[1] |= BATTLE_COMMAND_PAL_NUM << 12;
+        src[0] |= BATTLE_CURSOR_PAL_NUM << 12;
+        src[1] |= BATTLE_CURSOR_PAL_NUM << 12;
     }
 
     CopyToBgTilemapBufferRect_ChangePalette(0, src, 7 * (cursorPosition & 1) + 16, 35 + (cursorPosition & 2), 1, 2, 0x11);
@@ -1902,8 +1902,8 @@ void ActionSelectionDestroyCursorAt(u8 cursorPosition)
     u16 src[2];
     if (IsDarkUiEnabled())
     {
-        src[0] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
-        src[1] = (BATTLE_COMMAND_PAL_NUM << 12) | 0x16;
+        src[0] = (BATTLE_CURSOR_PAL_NUM << 12) | 0x16;
+        src[1] = (BATTLE_CURSOR_PAL_NUM << 12) | 0x16;
     }
     else
     {
