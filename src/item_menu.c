@@ -141,6 +141,7 @@ static void LoadBagItemListBuffers(u8);
 static void PrintPocketNames(const u8 *, const u8 *);
 static void CopyPocketNameToWindow(u32);
 static void DrawPocketIndicatorSquare(u8, bool8);
+static void DrawPocketIndicatorSquares(u8);
 static void CreatePocketScrollArrowPair(void);
 static void CreatePocketSwitchArrowPair(void);
 static void PrepareDarkBagHmIconGfx(void);
@@ -491,41 +492,17 @@ static const u16 sDarkBagPocketArrowPalette[16] =
     [2] = RGB(29, 25, 16),
 };
 
-// Soulgold fills only entries 0/1/9 here because its indicator tiles are drawn
-// with those pixel indices. HnS' tiles are different, so the entries below were
-// read straight out of VRAM (BG2 char base 0xC000, tiles 0x17 and 0x2B):
-//
-//   tile 0x17 (inactive)     tile 0x2B (active)
-//     CCCCCCCC                 CCCCCCCC
-//     DDDDDDDD                 DDDDDDDD
-//     DDDDDDDD                 DDDDDDDD
-//     CCCCCCCC                 CCEEEECC
-//     CCCAACCC                 CCEEEECC
-//     DDDAADDD                 DDEEEEDD
-//     DDDDDDDD                 DDEEEEDD
-//     CCCCCCCC                 CCCCCCCC
-//
-// So 12/13 (C/D) are the screen's striped background and must match it exactly,
-// 10 (A) is the inactive dot and 14 (E) the active square. Painting 12/13 with
-// the indicator colour turns the whole tile into a solid block.
-#define DARK_BAG_STRIPE_LIGHT RGB(8, 8, 8)  // menu_*_dark.pal entry 28
-#define DARK_BAG_STRIPE_DARK  RGB(7, 7, 7)  // menu_*_dark.pal entry 29
-
 static const u16 sDarkBagPocketIndicatorInactivePalette[16] =
 {
-    [0]  = DARK_BAG_BG_COLOR,
-    [10] = RGB(14, 14, 14),
-    [12] = DARK_BAG_STRIPE_LIGHT,
-    [13] = DARK_BAG_STRIPE_DARK,
+    [0] = DARK_BAG_BG_COLOR,
+    [9] = RGB(14, 14, 14),
 };
 
 static const u16 sDarkBagPocketIndicatorActivePalette[16] =
 {
-    [0]  = DARK_BAG_BG_COLOR,
-    [1]  = RGB_WHITE,
-    [12] = DARK_BAG_STRIPE_LIGHT,
-    [13] = DARK_BAG_STRIPE_DARK,
-    [14] = RGB(31, 25, 10),
+    [0] = DARK_BAG_BG_COLOR,
+    [1] = RGB_WHITE,
+    [9] = RGB(31, 25, 10),
 };
 
 static const struct WindowTemplate sDefaultBagWindows[] =
@@ -880,7 +857,7 @@ static bool8 SetupBagMenu(void)
     case 13:
         PrintPocketNames(gPocketNamesStringsTable[gBagPosition.pocket], 0);
         CopyPocketNameToWindow(0);
-        DrawPocketIndicatorSquare(gBagPosition.pocket, TRUE);
+        DrawPocketIndicatorSquares(gBagPosition.pocket);
         gMain.state++;
         break;
     case 14:
@@ -986,19 +963,10 @@ static bool8 LoadBagMenu_Graphics(void)
         // already loaded them, since BG3 shares BG2's char base) - only
         // the tilemap and the stars' own palette bank are still needed
         // here.
+        // Soulgold's starfield tilemap is drawn on palette bank 0 - the Bag's own -
+        // so it follows the male/female and light/dark palettes loaded above for
+        // free, with no palette of its own.
         LZDecompressVram(gBagScrollingBg_Tilemap, (void *)(BG_SCREEN_ADDR(28)));
-        // In Soulgold the starfield sits on the Bag's own palette bank 0, so it
-        // follows the light/dark and male/female variants automatically. HnS'
-        // bank 0 holds completely different colours (greys and gold, not a night
-        // sky), so the stars keep their own bank here - which means the four
-        // variants have to be selected explicitly. The palettes themselves are
-        // Soulgold's bank 0, extracted verbatim from its four menu_*.pal files.
-        if (!IsWallysBag() && gSaveBlock2Ptr->playerGender != MALE)
-            LoadCompressedPalette(IsDarkUiEnabled() ? gBagScrollingBg_Pal_Female_Dark : gBagScrollingBg_Pal_Female,
-                                  BG_PLTT_ID(2), PLTT_SIZE_4BPP);
-        else
-            LoadCompressedPalette(IsDarkUiEnabled() ? gBagScrollingBg_Pal_Dark : gBagScrollingBg_Pal,
-                                  BG_PLTT_ID(2), PLTT_SIZE_4BPP);
         gBagMenu->graphicsLoadState++;
         break;
     default:
@@ -1579,7 +1547,7 @@ static void SwitchBagPocket(u8 taskId, s16 deltaBagPocketId, bool16 skipEraseLis
     }
     DrawPocketIndicatorSquare(gBagPosition.pocket, FALSE);
     DrawPocketIndicatorSquare(newPocket, TRUE);
-    FillBgTilemapBufferRect_Palette0(2, 11, 14, 2, 15, 16);
+    FillBgTilemapBufferRect_Palette0(2, 8, 14, 2, 15, 16);
     ScheduleBgCopyTilemapToVram(2);
     SetBagVisualPocketId(newPocket, TRUE);
     RemoveBagSprite(ITEMMENUSPRITE_BALL);
@@ -1660,18 +1628,29 @@ static void PrepareDarkBagHmIconGfx(void)
 
 static void DrawPocketIndicatorSquare(u8 x, bool8 isCurrentPocket)
 {
-    // HnS' indicator tiles live in palette 1 (the 0x1017/0x102B entries below),
-    // so unlike Soulgold the light path has to keep passing 1 here.
-    u8 palette = 1;
+    static const u8 sPocketIndicatorXOffset = 4;
+    u8 palette = 0;
 
     if (IsDarkUiEnabled())
         palette = isCurrentPocket ? DARK_BAG_POCKET_INDICATOR_ACTIVE_PAL : DARK_BAG_POCKET_INDICATOR_INACTIVE_PAL;
 
     if (!isCurrentPocket)
-        FillBgTilemapBufferRect(2, 0x17, x + 5, 3, 1, 1, palette);
+        FillBgTilemapBufferRect(2, 0xC, x + sPocketIndicatorXOffset, 3, 1, 1, palette);
     else
-        FillBgTilemapBufferRect(2, 0x2B, x + 5, 3, 1, 1, palette);
+        FillBgTilemapBufferRect(2, 0x34, x + sPocketIndicatorXOffset, 3, 1, 1, palette);
     ScheduleBgCopyTilemapToVram(2);
+}
+
+// Soulgold's Bag tilemap has no pocket dots baked in - every square, active and
+// inactive, is drawn here at run time. HnS' old artwork had the inactive ones in
+// the tilemap and so only ever drew the current pocket; with Soulgold's artwork
+// that leaves the row empty except for the highlighted square.
+static void DrawPocketIndicatorSquares(u8 currentPocket)
+{
+    u8 i;
+
+    for (i = 0; i < POCKETS_COUNT; i++)
+        DrawPocketIndicatorSquare(i, i == currentPocket);
 }
 
 static bool8 CanSwapItems(void)
