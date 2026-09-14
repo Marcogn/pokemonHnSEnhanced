@@ -1025,6 +1025,117 @@ window geometry (`tilemapLeft/Top`, `width/height`) or text placement
 (`.x/.y`, letter/line spacing, font) touched anywhere in this branch — that
 layout is HnS' own and predates the dark UI.
 
+### 4.11 Bag starfield — verified, and what it is not (2026-09-14)
+
+The branch behind PR #2 was rebuilt on top of the merged `main` (dark UI, SwSh
+menu, speed-ups all come from `main`; the branch's own older copies of those
+were dropped). What is left that is unique to it is exactly six files: the
+**starfield background** behind the Bag.
+
+Verified against Soulgold's source and assets:
+
+* **Mechanism matches.** Same four-BG setup, BG3 on `charBaseIndex = 3` (shared
+  with BG2), `mapBaseIndex = 28`, `priority = 3`, shown with `ShowBg(3)`. The
+  starfield tilemap is full-screen in Soulgold too; what makes it visible only
+  in the left column is the *foreground* tilemap's transparent tiles, not the
+  starfield's shape.
+* **Self-contained.** The 14 star tiles live in a separate copy of the tileset
+  (`menu_with_stars.png`, 128x40 vs 128x32) with only **tile 2** blanked to
+  transparent. `gBagScreen_Gfx` itself is untouched, so
+  `battle_pyramid_bag.c` — which loads it with a different tilemap that needs
+  those tiles opaque — still works.
+* **Two deviations from Soulgold, both deliberate.** Soulgold's stars sit on
+  the Bag's own palette banks; here they get their own palette at
+  `BG_PLTT_ID(2)`, which is free on this screen. And the tilemap goes straight
+  to VRAM (`LZDecompressVram` to `BG_SCREEN_ADDR(28)`) rather than through a
+  second `SetBgTilemapBuffer`, since nothing scrolls it.
+* **Playtested** in the emulator on all five pockets and the item submenu, in
+  both Light and Dark themes: consistent, no bleed-through into the item list
+  panel or the description window, no regression from the merged dark UI.
+
+**What it is not.** This is a background, not a port of Soulgold's Bag screen.
+Rendering Soulgold's own `menu.png` + `menu.bin` + `menu_male.pal` side by side
+with HnS' Bag makes that plain: Soulgold's layout, panel shapes, header, key
+item box and proportions are all different. Porting *that* means replacing HnS'
+Bag artwork and tilemap wholesale and re-deriving the dark theme on top of it —
+a much larger job than this branch, and not what this branch does.
+
+### 4.12 Two things the first pass got wrong — the scroll and the palette
+
+Playtest feedback: *"lo sfondo è statico in Heart and Soul ma mi sembra che
+Soulgold sia in movimento"*, and the dark theme looked off. Both correct, both
+confirmed in Soulgold's source.
+
+* **It scrolls.** `ChangeBgY(3, 128, BG_COORD_ADD)` — 0.5 px per frame, the
+  value being 8.8 fixed point — is called from four of Soulgold's per-frame Bag
+  tasks (`Task_BagMenu_HandleInput`, `Task_HandleSwappingItemsInput`,
+  `Task_ItemContext_SingleRow`, `Task_ItemContext_MultipleRows`) plus once in
+  `SwitchBagPocket`. HnS has all five functions under the same names, so the
+  same call now sits in the same five places. The tilemap is a full 32x32 map on
+  a 256x256 BG, so it wraps seamlessly. The BG3 tilemap going straight to VRAM
+  rather than through `SetBgTilemapBuffer` does not matter here: `ChangeBgY`
+  only writes the hardware offset.
+* **The palette has four variants, not one.** Soulgold's starfield sits on the
+  Bag's own palette **bank 0**, so it inherits male/female and light/dark for
+  free. It cannot here: HnS' bank 0 at the exact indices the star tiles use
+  (1, 2, 3, 6, 8, 10) holds greys and gold, not a night sky — which is why the
+  stars were given their own bank in the first place, and that decision stands.
+  What was missing is that the *variants* then have to be selected explicitly.
+  `scrolling_bg.pal` turned out to be Soulgold's male light bank 0 copied
+  verbatim, so the other three were extracted the same way from
+  `menu_male_dark.pal`, `menu_female.pal` and `menu_female_dark.pal`, and
+  `LoadBagMenu_Graphics` now picks between them with the same gender test the
+  Bag's own palette uses.
+
+Measured in the emulator: sky `(24, 24, 66)` in light and `(8, 16, 33)` in dark,
+matching Soulgold's `(26, 31, 66)` / `(8, 16, 32)` to within 5-bit rounding, and
+the star field visibly advances frame to frame.
+
+### 4.13 The Bag really is the same screen — correcting §4.11
+
+§4.11 claimed Soulgold's Bag and HnS' were different screens ("layout, panel
+shapes, header and proportions all different") and that porting one onto the
+other was a much larger job. **That was wrong, and it was wrong because it was
+judged from rendered images instead of from the source.** Comparing the two
+`item_menu.c` directly:
+
+* `sDefaultBagWindows` is **byte-identical** in both — all six windows, same
+  `tilemapLeft/Top`, `width/height`, `paletteNum`.
+* `sItemListMenu` is identical (same `cursorPal`, `cursorShadowPal`,
+  `fillValue`, font, padding).
+* `sBagScrollArrowsTemplate` is identical.
+* `sBgTemplates_ItemMenu` matches once BG3 is added.
+
+The two Bags are the same design. The whole visual difference lived in three
+assets (the tileset, the tilemap and the palettes) and **three** tile numbers in
+code. So the swap was done:
+
+| what | from | note |
+|---|---|---|
+| `menu_with_stars.png` | Soulgold `menu.png` | 128x40, star tiles 64-77 already in it |
+| `menu.bin` | Soulgold `menu.bin` | Bag only; the Pyramid Bag has its own |
+| `menu_{male,female}{,_dark}.pal` | Soulgold's four | replaces every hand-derived value from §4.8-4.10 |
+| `scrolling_bg.bin` | Soulgold's | palette bank 0 now, so no separate starfield palette at all |
+
+Code sites that depended on HnS' tile numbering, all three changed to
+Soulgold's: the item-list clear (`FillBgTilemapBufferRect_Palette0(2, 11, ...)`
+to tile 8), and the two pocket-indicator fills (`0x17`/`0x2B` at `x + 5` to
+`0xC`/`0x34` at `x + 4`). `DrawPocketIndicatorSquares` was added as well:
+Soulgold bakes no pocket dots into its tilemap and draws every square at run
+time, where HnS had the inactive ones in the artwork and so only ever drew the
+current pocket — with Soulgold's artwork that left the row empty but for the
+highlight.
+
+Everything the earlier rounds hand-tuned for HnS' own Bag palette — entries 9,
+10, 17, 19, 26, the four `scrolling_bg*.pal` variants, the widened pocket
+indicator palettes — is gone, replaced by Soulgold's own values. The dark Bag is
+now Soulgold's dark Bag rather than an approximation of it.
+
+**Still not ported:** Soulgold's Bag *features* that HnS has no counterpart for,
+chiefly the key item wheel (`Task_KeyItemWheel`, registered shortcuts, Pokegear
+app icons) and its `CompareItemsByIndex` sort mode. HnS has its own register
+submenu and sort instead. Those are item-system changes, not Bag-screen changes.
+
 ---
 
 ## 5. Phase 4 — Party menu UI
