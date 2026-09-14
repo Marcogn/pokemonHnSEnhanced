@@ -1,6 +1,104 @@
 ![HnS Logo](HnS_Logo.png)
 
-# Pokémon Heart & Soul
+# Pokémon Heart & Soul Enhanced
+
+**This is a fork.** Pokémon Heart & Soul is made by Lil Dill and the
+PokemonHnS-Development team; everything that makes the game what it is, is
+theirs. This repository adds a handful of quality-of-life and UI options on top
+of it, most of them ported from **Soulgold**. It touches nothing else: no story,
+maps, encounters, trainers or balance.
+
+The original project's README follows in full below, including its credits,
+download and support links, which are the ones to use.
+
+---
+
+## What this fork adds
+
+Four new options in the in-game OPTIONS menu, plus one unconditional change to
+the Bag screen. Two of the options change the defaults — `BATTLE SPEED` starts
+at 2× and `PARTY MENU` at SWSH — and every one of them can be put back to the
+original behaviour without leaving the menu.
+
+Nothing here changes the save format: the save structures in
+`include/global.h` are untouched by this fork, so an existing Heart & Soul save
+keeps working and the new settings live in event vars.
+
+### Speed-up
+
+| Option | Page | Values | Default |
+|---|---|---|---|
+| `OW SPEED` | MAIN | 1× / 2× / 3× / 4× | 1× |
+| `BATTLE SPEED` | BATTLE | 1× / 2× / 3× | **2×** |
+
+Overworld and battle run faster without touching game logic.
+
+### SwSh-style party menu
+
+| Option | Page | Values | Default |
+|---|---|---|---|
+| `PARTY MENU` | BATTLE | CLASSIC / SWSH | **SWSH** |
+
+`CLASSIC` is Heart & Soul's own party screen, unchanged. `SWSH` is the
+Sword/Shield-style layout ported from Soulgold. Opening the Pokédex from the
+party menu now lands on that Pokémon's own page instead of the top of the list.
+
+### Dark UI
+
+| Option | Page | Values | Default |
+|---|---|---|---|
+| `DARK UI` | BATTLE | LIGHT / DARK | LIGHT |
+
+Recolours the battle interface and the Bag. `LIGHT` is byte-for-byte the
+original look. Note that it has to be checked against **both** healthbox skins
+(`BATTLE UI` = GEN 3 and GEN 4): the two use different palette indices, so a
+colour that is right for one can be wrong for the other.
+
+### Soulgold Bag screen
+
+Not an option — it replaces the Bag's artwork, tilemap and palettes with
+Soulgold's, including the scrolling starfield behind it. The Bag's window
+layout was already identical between the two projects, so this is a change of
+assets plus three tile numbers, not a rewrite. The Battle Pyramid Bag keeps the
+original graphics and is unaffected.
+
+**Not ported:** Soulgold's key item wheel (registered shortcuts, Pokégear app
+icons) and its index sort mode. Those are item-system features, not Bag-screen
+ones; Heart & Soul's own register submenu and sort stay as they are.
+
+### Building
+
+There are no patch releases for this fork — build it from source with
+`make modern`, following the upstream instructions in the
+[For Developers](#for-developers) section below.
+
+### Notes for anyone continuing this work
+
+`docs/PORT_PLAN_SOULGOLD_FEATURES.md` carries the full porting log, including
+the things that cost the most time:
+
+- Soulgold's UI palettes are per-index overrides tuned to **Soulgold's** art.
+  Heart & Soul's graphics use different indices on nearly every screen, so a
+  literal copy of a value often lands on an entry that is 0 (black). §4.8-§4.13.
+- A fast way to find which palette entry paints a given pixel: write marker
+  colours into `gPlttBufferFaded` **and** `gPlttBufferUnfaded`, entry *i* as
+  `RGB(i, 0, 31 - i)`, run three frames, screenshot, read *i* back from the red
+  channel. When pixel-exact numbers are needed, read the tiles out of VRAM
+  instead.
+- `gSaveBlock1Ptr->vars[]` sits at SaveBlock1 **+0x1490**; the `/*0x139C*/`
+  comment in `include/global.h` is stale.
+
+---
+
+# Pokémon Heart & Soul: the original project's README
+
+> Everything from here down is the upstream project's own documentation,
+> reproduced as-is. It describes Heart & Soul itself, not this fork: the
+> download, versions, credits, Discord and future plans below are theirs, and
+> the inherited *Modern Emerald Features* list at the end describes the
+> **base engine**, with annotations written by the upstream authors and not
+> re-checked here.
+
 Pokémon Heart & Soul brings the classic Johto Region and its iconic story to the world of modern GBA decomp hacking. Built on the Modern Emerald decomp, this project offers a fresh take on the GSC/HGSS experience, blending key aspects of the Gen 2 and Gen 4 games, while incorporating many modern QoL features, as well as some familiar Gen 3 mechanics. Not only is Heart & Soul (HnS) a first-of-its-kind, fully completed, playtested, and largely faithful GSC remake / HGSS demake, it's also completely open source, and is intended to be a base for a new generation of Johto rom hacks.
 
 ![HnS Collage](HnS_Collage_YourAdventure.png)
@@ -57,6 +155,9 @@ Development for this project was primarily (95%) a solo-effort that consumed alm
 - No trades in Kanto
 
 ## Download
+> Upstream Heart & Soul releases. This fork publishes no patch — see
+> [Building](#building) above.
+
 ### Download the .ups patch file in the (Releases) Section.
 - pokemonHnS_v1.0.ups  (to be patched onto a Pokemon - Emerald Version (U) ROM)
 
