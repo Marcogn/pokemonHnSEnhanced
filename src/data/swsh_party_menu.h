@@ -1293,12 +1293,20 @@ static const struct SpritePalette sSpritePalette_HeldItem =
     .data = gHeldItemPalette, .tag = TAG_HELD_ITEM
 };
 
+// NOTE: every SpriteTemplate below must set .anims/.affineAnims/.callback
+// explicitly. HnS's CreateSpriteAt assigns template fields straight through
+// with no NULL fallbacks, unlike pokeemerald-expansion (which this menu was
+// ported from) where CreateSpriteAt substitutes these same defaults itself.
+// An unset .callback makes AnimateSprites call NULL on the first frame, which
+// executes garbage and resets the console.
 static const struct SpriteTemplate sSpriteTemplate_HeldItem =
 {
     .tileTag = TAG_HELD_ITEM,
     .paletteTag = TAG_HELD_ITEM,
     .oam = &sOamData_HeldItem,
     .anims = sSpriteAnimTable_HeldItem,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const struct OamData sOamData_HoverCursor =
@@ -1330,6 +1338,9 @@ static const struct SpriteTemplate sSpriteTemplate_HoverCursor =
     .tileTag = TAG_HOVER_CURSOR,
     .paletteTag = TAG_HELD_ITEM,
     .oam = &sOamData_HoverCursor,
+    .anims = gDummySpriteAnimTable,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const struct OamData sOamData_SelectFrame =
@@ -1387,6 +1398,8 @@ static const struct SpriteTemplate sSpriteTemplate_SelectFrame =
     .paletteTag = TAG_HELD_ITEM,
     .oam = &sOamData_SelectFrame,
     .anims = sSpriteAnimTable_SelectFrame,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const struct OamData sOamData_MessageWindow =
@@ -1459,6 +1472,8 @@ static const struct SpriteTemplate sSpriteTemplate_MessageWindow =
     .paletteTag = TAG_HELD_ITEM,
     .oam = &sOamData_MessageWindow,
     .anims = sSpriteAnimTable_MessageWindow,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const struct OamData sOamData_MultiuseWindow =
@@ -1521,6 +1536,8 @@ static const struct SpriteTemplate sSpriteTemplate_MultiuseWindow =
     .paletteTag = TAG_HELD_ITEM,
     .oam = &sOamData_MultiuseWindow,
     .anims = sSpriteAnimTable_MultiuseWindow,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const struct SpritePalette sSpritePal_PartyMonShadow =
@@ -1625,6 +1642,8 @@ const struct SpriteTemplate gSpriteTemplate_StatusIcons =
     .paletteTag = TAG_HELD_ITEM,
     .oam = &sOamData_StatusCondition,
     .anims = sSpriteTemplate_StatusCondition,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const struct OamData sOamData_MoveTypes =
@@ -1775,6 +1794,8 @@ static const struct SpriteTemplate sSwshSpriteTemplate_MoveTypes =
     .paletteTag = TAG_MOVE_TYPES,
     .oam = &sOamData_MoveTypes,
     .anims = sSpriteAnimTable_MoveTypes,
+    .affineAnims = gDummySpriteAffineAnimTable,
+    .callback = SpriteCallbackDummy,
 };
 
 static const u8 *const sUnused_StatStrings[] =

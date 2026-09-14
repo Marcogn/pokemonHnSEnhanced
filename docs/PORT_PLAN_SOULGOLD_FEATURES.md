@@ -960,96 +960,67 @@ statics and struct members — filter by hand.)
 * Followers are restored correctly after Teleport and after a warp.
 * Switching the option and re-opening the menu takes effect without a reset.
 
-### 5.8 KNOWN ISSUE (2026-09-14): SwSh crashes on open — undiagnosed, default changed to HnS classic
+### 5.8 RESOLVED (2026-09-14): SwSh crashed on open — NULL sprite callbacks
 
-**Status: reproduced live, root cause NOT found. `PARTY_MENU_STYLE_DEFAULT` is
-temporarily `PARTY_MENU_STYLE_HNS` (include/constants/global.h) until this is
-fixed.** SwSh stays selectable in Options for anyone who wants to help debug
-it live; it is not safe as the out-of-the-box default.
+**Root cause: seven of the SwSh `SpriteTemplate`s omit `.callback` (and some
+also omit `.anims` / `.affineAnims`), which is harmless on
+pokeemerald-expansion but fatal on HnS's base.**
 
-**Symptom**: opening the party menu (Start → Pokémon) while
-`VAR_PARTY_MENU_STYLE` resolves to SwSh resets the game to the copyright/boot
-screen, every time, on the very first frame the menu would render — not
-specific to battle vs. overworld, not specific to a particular Pokémon or
-save. The HnS classic style does not reproduce this on the same save
-(user-confirmed).
+`CreateSpriteAt` in pokeemerald-expansion (`../soulgold/src/sprite.c`)
+substitutes defaults for missing template fields:
 
-**What's already ruled out**, each confirmed by reproducing live in a headless
-mGBA (`python-mgba`) instance loaded with a real user `.sav`, not by
-inspection alone:
+```c
+sprite->anims       = template->anims       ? template->anims       : gDummySpriteAnimTable;
+sprite->affineAnims = template->affineAnims ? template->affineAnims : gDummySpriteAffineAnimTable;
+sprite->callback    = template->callback    ? template->callback    : SpriteCallbackDummy;
+```
 
-1. `gComfyAnims` never being allocated (`InitComfyAnims()`/`FreeComfyAnims()`
-   were never wired into the party menu's init/teardown, despite
-   `comfy_anim.h`'s own doc comment saying callers must). This was real and is
-   fixed (commit `919699ec`), but does **not** fix this crash — it still
-   reproduces on top of that fix.
-2. `InitPartyMenuBoxes()`'s unchecked `Alloc()` (also fixed in `919699ec`) —
-   not the cause either; the heap allocation succeeds fine this early.
-3. `LoadPartyBoxPalette()` (called from `AnimatePartySlot` while rendering the
-   selected slot) — temporarily stubbed out; crash still reproduces, just
-   slightly earlier in the same sequence.
-4. `RenderPartyMenuBoxes()` entirely (all box drawing/blitting, case 13 of
-   `ShowPartyMenu`'s state machine) — temporarily stubbed out; crash **still**
-   reproduces, now during `CreatePartyMonSpritesLoop`/icon sprite creation
-   (case 12). So it is not in the box-rendering/`BlitBitmapRect4Bit` path.
-5. `CreatePartyMonSpritesLoop()` (icon/held-item/status sprite creation, case
-   12) *also* stubbed out on top of (4) — crash **still** reproduces, now
-   during/after `DecompressGraphics()` (case 8) finishing and
-   `InitPartySlotAnimations()`/`InitPartySlotScanlineEffect()` running (case
-   15-ish). So it is not sprite creation either.
-6. Not an EWRAM/VRAM budget overflow found by inspection: every
-   `LoadCompressedSpriteSheet`/`LZDecompressWram` destination buffer's fixed
-   size was checked against the actual asset's real decompressed size (the LZ
-   header's declared size) — `sPartyBgTilemapBuffer`/`sPartyBg3TilemapBuffer`
-   (0x800 each) and all five extra sprite sheets (HoverCursor, SelectFrame,
-   MessageWindow, MultiuseWindow, StatusIcons) match exactly, no overflow.
-   Total extra OBJ sprite-tile VRAM used by SwSh's sheets is ~200 tiles
-   (~6.4 KB) against the hardware's 1024-tile budget — nowhere near exhausted.
-   `sPartyMenuSpriteCoords` and the various palette-ID/offset tables
-   (`sPartyBoxCurrSelectionPalIds1/2/3` etc.) were checked and are in-bounds
-   for `sPartyMenuInternal->palBuffer[256]`.
+HnS's `gflib/sprite.c` assigns them straight through, with no fallbacks. So a
+template that leaves `.callback` unset produces a sprite whose callback is
+NULL, and `AnimateSprites` — identical in both projects — calls it
+unconditionally on the very next frame:
 
-**What the crash actually looks like at the hardware level** (traced with
-`core.step()` single-instruction stepping and symbol resolution against the
-ELF, see the session's `/tmp/swsh_debug/trace_crash*.py` scripts — not
-preserved in the repo, but the technique is worth recreating if you pick this
-back up): the CPU takes a genuine ARM7TDMI **Prefetch Abort** exception
-(PC lands on vector `0x0000000C`) during a `CpuSet` BIOS call reached via
-`LoadPalette`/`CpuCopy16`, with `LR` pointing back into `CpuSet` cleanly and
-`r0`/`r1` both individually valid, in-range, correctly-aligned EWRAM
-addresses for a 1-halfword 16-bit copy — i.e. the *parameters* to that one
-call look fine in isolation. Given point 3 above (stubbing out that exact
-call site didn't stop the crash, just relocated it), this almost certainly
-means something earlier in `DecompressGraphics()`'s asset-loading sequence
-(cases 0-21 of its own internal switch) is corrupting memory — most likely
-IWRAM, given the fault manifests as a hardware exception rather than a wrong
-value — and the *symptom* simply surfaces wherever the next
-BIOS/SWI-dependent call happens to land, which shifts depending on what
-else got bisected out. **Next steps for whoever picks this up**: bisect
-inside `DecompressGraphics()`'s own switch (cases 0-21) the same way cases
-12/13 were bisected here; in particular look hard at anything writing through
-a computed/indexed pointer into IWRAM (the interrupt vector table and BIOS
-call stack both live in low IWRAM, and corrupting either would produce
-exactly this symptom - a hardware exception whose default handler falls
-through to something that looks like the game restarting).
+```
+AnimateSprites+0x4c:  ldr r3, [r6, #28]   ; r3 = sprite->callback  (NULL)
+                      bl  _call_via_r3    ; "bx r3"  ->  PC = 0
+```
 
-**Discrepancy above, now resolved**: forcing `VAR_PARTY_MENU_STYLE` to the
-classic value (1) by writing it directly into the loaded save's memory *also*
-crashed in this session's headless-mGBA testing, contradicting the
-disassembly (which is unambiguous - stored value 1 branches straight to
-`HnsPartyMenu_CB2_PartyMenuFromStartMenu`, never touching SwSh). The user
-confirmed on real hardware/their own emulator, via the real in-game Options
-menu (not a memory poke) on the build with `PARTY_MENU_STYLE_DEFAULT`
-switched to `PARTY_MENU_STYLE_HNS` (commit `cbfa7d0f`): **classic works,
-only SwSh crashes.** So the dispatcher is fine; the discrepancy was this
-session's own test harness (a raw memory poke into `gSaveBlock1Ptr->vars` is
-not equivalent to going through the real Options menu flow - most likely the
-poke either didn't survive to the moment `VarGet` ran, or the emulator
-instance under test wasn't the one actually reflecting the poke). Trust
-"classic works, SwSh doesn't" as confirmed fact; don't waste time
-re-litigating it. The still-open task is exactly what §5.8's main text
-describes: root-causing SwSh's own crash, starting from bisecting inside
-`DecompressGraphics()`'s switch.
+`bx` to 0 executes the BIOS's ARM reset vector as Thumb, which faults to the
+undefined-instruction vector (0x00000004) and ends up back at the cartridge
+entry point (0x08000000) — i.e. the console appears to "reset to the boot
+screen", exactly the reported symptom. It reproduces 100% of the time because
+the hover-cursor sprite is created during menu setup.
+
+**Fix**: set `.anims` / `.affineAnims` / `.callback` explicitly on every
+SpriteTemplate in `src/data/swsh_party_menu.h`, using the same defaults
+expansion would have substituted (`gDummySpriteAnimTable`,
+`gDummySpriteAffineAnimTable`, `SpriteCallbackDummy`). Minimal blast radius —
+only the ported data changes, no shared engine code is touched. A note above
+the first template records the constraint for anyone adding templates later.
+
+**Correction to an earlier diagnosis in this document's history:** a previous
+session concluded the crash was a hardware *Prefetch Abort* inside a `CpuSet`
+BIOS call. **That was wrong**, and worth recording so nobody repeats it. The
+"evidence" was a trace showing `PC = 0x0000000C` right after `CpuSet`. But
+`CpuSet` is just `svc 11`, and on ARM the SWI vector is at 0x00000008, which
+*reads as 0x0C* because of the +4 instruction-pipeline offset. **Every BIOS
+call in the game passes through that value**, so treating `pc < 0x20` as a
+fault signature produced a false positive on essentially any frame. The
+correct, unambiguous reset signature is `PC` entering the ROM entry region
+(`0x08000000`–`0x080000C0`); detecting only that leads straight to the real
+call chain above in a single trace.
+
+Also disproved along the way, so they need not be re-investigated: the heap is
+healthy at the moment of the crash (peak 65144 of 114672 bytes across 25
+blocks, every block's magic intact, no overflow past the end into `gSprites`,
+largest free block ~49 KB — no exhaustion and no fragmentation); every
+compressed asset's declared decompressed size matches its destination buffer
+exactly; and the port itself is faithful to Soulgold — `ShowPartyMenu`,
+`InitPartyMenu`, `AllocPartyMenuBg`, `DecompressGraphics`,
+`InitPartyMenuWindows`, `LoadPartyMenuWindows`, `LoadPartyMenuBoxes` and
+`ResetPartyMenu` are byte-identical to the originals apart from the deliberate
+`.smol`→`.lz` asset re-encode and the heap-allocated `gComfyAnims`.
+
 
 ---
 
