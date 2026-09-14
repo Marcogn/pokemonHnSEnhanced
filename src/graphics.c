@@ -1192,6 +1192,9 @@ const u32 gBagScreen_GfxTileMap[] = INCBIN_U32("graphics/bag/menu.bin.lz");
 const u32 gBagScreenWithStars_Gfx[] = INCBIN_U32("graphics/bag/menu_with_stars.4bpp.lz");
 const u32 gBagScrollingBg_Tilemap[] = INCBIN_U32("graphics/bag/scrolling_bg.bin.lz");
 const u32 gBagScrollingBg_Pal[] = INCBIN_U32("graphics/bag/scrolling_bg.gbapal.lz");
+const u32 gBagScrollingBg_Pal_Dark[] = INCBIN_U32("graphics/bag/scrolling_bg_dark.gbapal.lz");
+const u32 gBagScrollingBg_Pal_Female[] = INCBIN_U32("graphics/bag/scrolling_bg_female.gbapal.lz");
+const u32 gBagScrollingBg_Pal_Female_Dark[] = INCBIN_U32("graphics/bag/scrolling_bg_female_dark.gbapal.lz");
 
 const u32 gBattlePyramidBag_Gfx[]          = INCBIN_U32("graphics/bag/bag_pyramid.4bpp.lz");
 const u32 gBattlePyramidBag_Pal[]          = INCBIN_U32("graphics/bag/bag_pyramid.gbapal.lz"); // female palette is first and male is second.

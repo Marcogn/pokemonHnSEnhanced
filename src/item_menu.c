@@ -987,7 +987,18 @@ static bool8 LoadBagMenu_Graphics(void)
         // the tilemap and the stars' own palette bank are still needed
         // here.
         LZDecompressVram(gBagScrollingBg_Tilemap, (void *)(BG_SCREEN_ADDR(28)));
-        LoadCompressedPalette(gBagScrollingBg_Pal, BG_PLTT_ID(2), PLTT_SIZE_4BPP);
+        // In Soulgold the starfield sits on the Bag's own palette bank 0, so it
+        // follows the light/dark and male/female variants automatically. HnS'
+        // bank 0 holds completely different colours (greys and gold, not a night
+        // sky), so the stars keep their own bank here - which means the four
+        // variants have to be selected explicitly. The palettes themselves are
+        // Soulgold's bank 0, extracted verbatim from its four menu_*.pal files.
+        if (!IsWallysBag() && gSaveBlock2Ptr->playerGender != MALE)
+            LoadCompressedPalette(IsDarkUiEnabled() ? gBagScrollingBg_Pal_Female_Dark : gBagScrollingBg_Pal_Female,
+                                  BG_PLTT_ID(2), PLTT_SIZE_4BPP);
+        else
+            LoadCompressedPalette(IsDarkUiEnabled() ? gBagScrollingBg_Pal_Dark : gBagScrollingBg_Pal,
+                                  BG_PLTT_ID(2), PLTT_SIZE_4BPP);
         gBagMenu->graphicsLoadState++;
         break;
     default:
@@ -1395,6 +1406,10 @@ static void Task_BagMenu_HandleInput(u8 taskId)
     u16 *cursorPos = &gBagPosition.cursorPosition[gBagPosition.pocket];
     s32 listPosition;
 
+    // Soulgold scrolls the starfield from its per-frame Bag tasks, 0.5px a frame
+    // (ChangeBgY's value is 8.8 fixed point). Same call, same four call sites.
+    ChangeBgY(3, 128, BG_COORD_ADD);
+
     if (MenuHelpers_ShouldWaitForLinkRecv() != TRUE && !gPaletteFade.active)
     {
         switch (GetSwitchBagPocketDirection())
@@ -1533,6 +1548,10 @@ static void SwitchBagPocket(u8 taskId, s16 deltaBagPocketId, bool16 skipEraseLis
 {
     s16 *data = gTasks[taskId].data;
     u8 newPocket;
+
+    // Soulgold scrolls the starfield from its per-frame Bag tasks, 0.5px a frame
+    // (ChangeBgY's value is 8.8 fixed point). Same call, same four call sites.
+    ChangeBgY(3, 128, BG_COORD_ADD);
 
     tPocketSwitchState = 0;
     tPocketSwitchTimer = 0;
@@ -1689,6 +1708,10 @@ static void StartItemSwap(u8 taskId)
 static void Task_HandleSwappingItemsInput(u8 taskId)
 {
     s16 *data = gTasks[taskId].data;
+
+    // Soulgold scrolls the starfield from its per-frame Bag tasks, 0.5px a frame
+    // (ChangeBgY's value is 8.8 fixed point). Same call, same four call sites.
+    ChangeBgY(3, 128, BG_COORD_ADD);
 
     if (MenuHelpers_ShouldWaitForLinkRecv() != TRUE)
     {
@@ -1939,6 +1962,10 @@ static void Task_ItemContext_Normal(u8 taskId)
 
 static void Task_ItemContext_SingleRow(u8 taskId)
 {
+    // Soulgold scrolls the starfield from its per-frame Bag tasks, 0.5px a frame
+    // (ChangeBgY's value is 8.8 fixed point). Same call, same four call sites.
+    ChangeBgY(3, 128, BG_COORD_ADD);
+
     if (MenuHelpers_ShouldWaitForLinkRecv() != TRUE)
     {
         s8 selection = Menu_ProcessInputNoWrap();
@@ -1960,6 +1987,10 @@ static void Task_ItemContext_SingleRow(u8 taskId)
 
 static void Task_ItemContext_MultipleRows(u8 taskId)
 {
+    // Soulgold scrolls the starfield from its per-frame Bag tasks, 0.5px a frame
+    // (ChangeBgY's value is 8.8 fixed point). Same call, same four call sites.
+    ChangeBgY(3, 128, BG_COORD_ADD);
+
     if (MenuHelpers_ShouldWaitForLinkRecv() != TRUE)
     {
         s8 cursorPos = Menu_GetCursorPos();

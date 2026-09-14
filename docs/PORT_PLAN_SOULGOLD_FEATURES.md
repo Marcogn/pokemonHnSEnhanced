@@ -1060,6 +1060,37 @@ item box and proportions are all different. Porting *that* means replacing HnS'
 Bag artwork and tilemap wholesale and re-deriving the dark theme on top of it —
 a much larger job than this branch, and not what this branch does.
 
+### 4.12 Two things the first pass got wrong — the scroll and the palette
+
+Playtest feedback: *"lo sfondo è statico in Heart and Soul ma mi sembra che
+Soulgold sia in movimento"*, and the dark theme looked off. Both correct, both
+confirmed in Soulgold's source.
+
+* **It scrolls.** `ChangeBgY(3, 128, BG_COORD_ADD)` — 0.5 px per frame, the
+  value being 8.8 fixed point — is called from four of Soulgold's per-frame Bag
+  tasks (`Task_BagMenu_HandleInput`, `Task_HandleSwappingItemsInput`,
+  `Task_ItemContext_SingleRow`, `Task_ItemContext_MultipleRows`) plus once in
+  `SwitchBagPocket`. HnS has all five functions under the same names, so the
+  same call now sits in the same five places. The tilemap is a full 32x32 map on
+  a 256x256 BG, so it wraps seamlessly. The BG3 tilemap going straight to VRAM
+  rather than through `SetBgTilemapBuffer` does not matter here: `ChangeBgY`
+  only writes the hardware offset.
+* **The palette has four variants, not one.** Soulgold's starfield sits on the
+  Bag's own palette **bank 0**, so it inherits male/female and light/dark for
+  free. It cannot here: HnS' bank 0 at the exact indices the star tiles use
+  (1, 2, 3, 6, 8, 10) holds greys and gold, not a night sky — which is why the
+  stars were given their own bank in the first place, and that decision stands.
+  What was missing is that the *variants* then have to be selected explicitly.
+  `scrolling_bg.pal` turned out to be Soulgold's male light bank 0 copied
+  verbatim, so the other three were extracted the same way from
+  `menu_male_dark.pal`, `menu_female.pal` and `menu_female_dark.pal`, and
+  `LoadBagMenu_Graphics` now picks between them with the same gender test the
+  Bag's own palette uses.
+
+Measured in the emulator: sky `(24, 24, 66)` in light and `(8, 16, 33)` in dark,
+matching Soulgold's `(26, 31, 66)` / `(8, 16, 32)` to within 5-bit rounding, and
+the star field visibly advances frame to frame.
+
 ---
 
 ## 5. Phase 4 — Party menu UI

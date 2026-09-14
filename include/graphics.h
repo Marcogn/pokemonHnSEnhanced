@@ -4524,6 +4524,9 @@ extern const u32 gBagScreenMale_Pal_Dark[];
 extern const u32 gBagScreenWithStars_Gfx[];
 extern const u32 gBagScrollingBg_Tilemap[];
 extern const u32 gBagScrollingBg_Pal[];
+extern const u32 gBagScrollingBg_Pal_Dark[];
+extern const u32 gBagScrollingBg_Pal_Female[];
+extern const u32 gBagScrollingBg_Pal_Female_Dark[];
 extern const u8 gBagMenuHMIcon_Gfx[];
 
 // item menu icons graphics
