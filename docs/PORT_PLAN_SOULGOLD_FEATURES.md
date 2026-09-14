@@ -960,6 +960,97 @@ statics and struct members — filter by hand.)
 * Followers are restored correctly after Teleport and after a warp.
 * Switching the option and re-opening the menu takes effect without a reset.
 
+### 5.8 KNOWN ISSUE (2026-09-14): SwSh crashes on open — undiagnosed, default changed to HnS classic
+
+**Status: reproduced live, root cause NOT found. `PARTY_MENU_STYLE_DEFAULT` is
+temporarily `PARTY_MENU_STYLE_HNS` (include/constants/global.h) until this is
+fixed.** SwSh stays selectable in Options for anyone who wants to help debug
+it live; it is not safe as the out-of-the-box default.
+
+**Symptom**: opening the party menu (Start → Pokémon) while
+`VAR_PARTY_MENU_STYLE` resolves to SwSh resets the game to the copyright/boot
+screen, every time, on the very first frame the menu would render — not
+specific to battle vs. overworld, not specific to a particular Pokémon or
+save. The HnS classic style does not reproduce this on the same save
+(user-confirmed).
+
+**What's already ruled out**, each confirmed by reproducing live in a headless
+mGBA (`python-mgba`) instance loaded with a real user `.sav`, not by
+inspection alone:
+
+1. `gComfyAnims` never being allocated (`InitComfyAnims()`/`FreeComfyAnims()`
+   were never wired into the party menu's init/teardown, despite
+   `comfy_anim.h`'s own doc comment saying callers must). This was real and is
+   fixed (commit `919699ec`), but does **not** fix this crash — it still
+   reproduces on top of that fix.
+2. `InitPartyMenuBoxes()`'s unchecked `Alloc()` (also fixed in `919699ec`) —
+   not the cause either; the heap allocation succeeds fine this early.
+3. `LoadPartyBoxPalette()` (called from `AnimatePartySlot` while rendering the
+   selected slot) — temporarily stubbed out; crash still reproduces, just
+   slightly earlier in the same sequence.
+4. `RenderPartyMenuBoxes()` entirely (all box drawing/blitting, case 13 of
+   `ShowPartyMenu`'s state machine) — temporarily stubbed out; crash **still**
+   reproduces, now during `CreatePartyMonSpritesLoop`/icon sprite creation
+   (case 12). So it is not in the box-rendering/`BlitBitmapRect4Bit` path.
+5. `CreatePartyMonSpritesLoop()` (icon/held-item/status sprite creation, case
+   12) *also* stubbed out on top of (4) — crash **still** reproduces, now
+   during/after `DecompressGraphics()` (case 8) finishing and
+   `InitPartySlotAnimations()`/`InitPartySlotScanlineEffect()` running (case
+   15-ish). So it is not sprite creation either.
+6. Not an EWRAM/VRAM budget overflow found by inspection: every
+   `LoadCompressedSpriteSheet`/`LZDecompressWram` destination buffer's fixed
+   size was checked against the actual asset's real decompressed size (the LZ
+   header's declared size) — `sPartyBgTilemapBuffer`/`sPartyBg3TilemapBuffer`
+   (0x800 each) and all five extra sprite sheets (HoverCursor, SelectFrame,
+   MessageWindow, MultiuseWindow, StatusIcons) match exactly, no overflow.
+   Total extra OBJ sprite-tile VRAM used by SwSh's sheets is ~200 tiles
+   (~6.4 KB) against the hardware's 1024-tile budget — nowhere near exhausted.
+   `sPartyMenuSpriteCoords` and the various palette-ID/offset tables
+   (`sPartyBoxCurrSelectionPalIds1/2/3` etc.) were checked and are in-bounds
+   for `sPartyMenuInternal->palBuffer[256]`.
+
+**What the crash actually looks like at the hardware level** (traced with
+`core.step()` single-instruction stepping and symbol resolution against the
+ELF, see the session's `/tmp/swsh_debug/trace_crash*.py` scripts — not
+preserved in the repo, but the technique is worth recreating if you pick this
+back up): the CPU takes a genuine ARM7TDMI **Prefetch Abort** exception
+(PC lands on vector `0x0000000C`) during a `CpuSet` BIOS call reached via
+`LoadPalette`/`CpuCopy16`, with `LR` pointing back into `CpuSet` cleanly and
+`r0`/`r1` both individually valid, in-range, correctly-aligned EWRAM
+addresses for a 1-halfword 16-bit copy — i.e. the *parameters* to that one
+call look fine in isolation. Given point 3 above (stubbing out that exact
+call site didn't stop the crash, just relocated it), this almost certainly
+means something earlier in `DecompressGraphics()`'s asset-loading sequence
+(cases 0-21 of its own internal switch) is corrupting memory — most likely
+IWRAM, given the fault manifests as a hardware exception rather than a wrong
+value — and the *symptom* simply surfaces wherever the next
+BIOS/SWI-dependent call happens to land, which shifts depending on what
+else got bisected out. **Next steps for whoever picks this up**: bisect
+inside `DecompressGraphics()`'s own switch (cases 0-21) the same way cases
+12/13 were bisected here; in particular look hard at anything writing through
+a computed/indexed pointer into IWRAM (the interrupt vector table and BIOS
+call stack both live in low IWRAM, and corrupting either would produce
+exactly this symptom - a hardware exception whose default handler falls
+through to something that looks like the game restarting).
+
+**Open discrepancy, not resolved**: forcing `VAR_PARTY_MENU_STYLE` to the
+classic value (1) by writing it directly into the loaded save's memory, on
+the exact save that crashes with SwSh, *also* crashed in this session's
+headless-mGBA testing - even though the disassembly of the compiled
+dispatcher (`CB2_PartyMenuFromStartMenu` in `party_menu_dispatch.c`) is
+unambiguous: for a stored value of 1 it computes `PARTY_MENU_STYLE_HNS` and
+branches to `HnsPartyMenu_CB2_PartyMenuFromStartMenu`, never touching SwSh's
+code at all. Live single-instruction tracing to directly confirm which
+branch actually executed did not manage to re-locate the dispatcher's own
+address before the session's time ran out, so this is unresolved: it could
+mean there's a second, real bug that also breaks (or bypasses) the classic
+path on this specific save, or it could be an artifact of this session's
+test harness (a stale `gSaveBlock1Ptr`-relocation assumption, or a poke that
+didn't survive to the moment `VarGet` actually runs). **Before trusting
+"classic works" as a blanket statement, verify it fresh** - ideally by
+reproducing via the in-game Options menu on real hardware/a real emulator
+rather than a memory poke, since that removes this whole class of doubt.
+
 ---
 
 ## 6. Defaults, and compatibility with existing saves

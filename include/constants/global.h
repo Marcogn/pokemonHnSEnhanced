@@ -149,7 +149,11 @@
 #define PARTY_MENU_STYLE_HNS     0
 #define PARTY_MENU_STYLE_SWSH    1
 #define PARTY_MENU_STYLE_COUNT   2
-#define PARTY_MENU_STYLE_DEFAULT PARTY_MENU_STYLE_SWSH
+// SwSh crashes on open (undiagnosed hardware exception during party menu
+// setup - see docs/PORT_PLAN_SOULGOLD_FEATURES.md §5.8); default to the
+// working classic style until that's root-caused. SwSh stays selectable
+// in Options for testing.
+#define PARTY_MENU_STYLE_DEFAULT PARTY_MENU_STYLE_HNS
 
 #define DIR_NONE        0
 #define DIR_SOUTH       1
