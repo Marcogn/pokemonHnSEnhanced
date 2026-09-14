@@ -479,52 +479,41 @@ static const u16 sDarkBagPocketArrowPalette[16] =
     [2] = RGB(29, 25, 16),
 };
 
-// Soulgold only fills index 0/1/9 here, because its pocket-indicator tiles are
-// drawn with those pixel indices. HnS' tiles (0x17 / 0x2B) use 10 and 12-14
-// instead, which in a Soulgold-shaped palette are 0 = black, so the squares
-// disappeared. Every index except 0 (the tile background) therefore carries the
-// indicator colour, which also makes these immune to further tile changes.
-#define DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR RGB(14, 14, 14)
-#define DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR   RGB(31, 25, 10)
+// Soulgold fills only entries 0/1/9 here because its indicator tiles are drawn
+// with those pixel indices. HnS' tiles are different, so the entries below were
+// read straight out of VRAM (BG2 char base 0xC000, tiles 0x17 and 0x2B):
+//
+//   tile 0x17 (inactive)     tile 0x2B (active)
+//     CCCCCCCC                 CCCCCCCC
+//     DDDDDDDD                 DDDDDDDD
+//     DDDDDDDD                 DDDDDDDD
+//     CCCCCCCC                 CCEEEECC
+//     CCCAACCC                 CCEEEECC
+//     DDDAADDD                 DDEEEEDD
+//     DDDDDDDD                 DDEEEEDD
+//     CCCCCCCC                 CCCCCCCC
+//
+// So 12/13 (C/D) are the screen's striped background and must match it exactly,
+// 10 (A) is the inactive dot and 14 (E) the active square. Painting 12/13 with
+// the indicator colour turns the whole tile into a solid block.
+#define DARK_BAG_STRIPE_LIGHT RGB(8, 8, 8)  // menu_*_dark.pal entry 28
+#define DARK_BAG_STRIPE_DARK  RGB(7, 7, 7)  // menu_*_dark.pal entry 29
 
 static const u16 sDarkBagPocketIndicatorInactivePalette[16] =
 {
-    [0] = DARK_BAG_BG_COLOR,
-    [1] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [2] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [3] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [4] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [5] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [6] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [7] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [8] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [9] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [10] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [11] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [12] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [13] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [14] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
-    [15] = DARK_BAG_POCKET_INDICATOR_INACTIVE_COLOR,
+    [0]  = DARK_BAG_BG_COLOR,
+    [10] = RGB(14, 14, 14),
+    [12] = DARK_BAG_STRIPE_LIGHT,
+    [13] = DARK_BAG_STRIPE_DARK,
 };
 
 static const u16 sDarkBagPocketIndicatorActivePalette[16] =
 {
-    [0] = DARK_BAG_BG_COLOR,
-    [1] = RGB_WHITE,
-    [2] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [3] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [4] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [5] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [6] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [7] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [8] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [9] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [10] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [11] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [12] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [13] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [14] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
-    [15] = DARK_BAG_POCKET_INDICATOR_ACTIVE_COLOR,
+    [0]  = DARK_BAG_BG_COLOR,
+    [1]  = RGB_WHITE,
+    [12] = DARK_BAG_STRIPE_LIGHT,
+    [13] = DARK_BAG_STRIPE_DARK,
+    [14] = RGB(31, 25, 10),
 };
 
 static const struct WindowTemplate sDefaultBagWindows[] =
