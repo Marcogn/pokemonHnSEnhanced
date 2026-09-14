@@ -142,6 +142,9 @@ static u32 GetAvailableComfyAnim(void)
 {
     int i;
 
+    if (gComfyAnims == NULL)
+        return INVALID_COMFY_ANIM;
+
     // Find the first free comfy anim.
     for (i = 0; i < NUM_COMFY_ANIMS; i++)
     {
@@ -218,7 +221,7 @@ u32 CreateComfyAnim_Spring(struct ComfyAnimSpringConfig *config)
 
 void ReleaseComfyAnim(u32 comfyAnimId)
 {
-    if (comfyAnimId < NUM_COMFY_ANIMS)
+    if (gComfyAnims != NULL && comfyAnimId < NUM_COMFY_ANIMS)
         gComfyAnims[comfyAnimId].inUse = FALSE;
 }
 

@@ -67,8 +67,8 @@ enum
     MENUITEM_BATTLE_RUN_TYPE,
     MENUITEM_BATTLE_LR_RUN,
     MENUITEM_BATTLE_SPEED,
-    MENUITEM_BATTLE_DARK_UI,
     MENUITEM_BATTLE_PARTY_MENU_STYLE,
+    MENUITEM_BATTLE_DARK_UI,
     MENUITEM_BATTLE_COUNT,
 };
 
@@ -233,8 +233,8 @@ static void DrawChoices_Run_Type(int selection, int y);
 static void DrawChoices_Autorun_Surf(int selection, int y);
 static void DrawChoices_Autorun_Dive(int selection, int y);
 static void DrawChoices_BattleSpeed(int selection, int y);
-static void DrawChoices_DarkUi(int selection, int y);
 static void DrawChoices_PartyMenuStyle(int selection, int y);
+static void DrawChoices_DarkUi(int selection, int y);
 static void DrawBgWindowFrames(void);
 
 // EWRAM vars
@@ -304,8 +304,8 @@ struct // MENU_CUSTOM
     [MENUITEM_BATTLE_NEW_BATTLEUI]     = {DrawChoices_New_BattleUI,    ProcessInput_Options_Two},
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]     = {DrawChoices_GenOne_Recharge,    ProcessInput_Options_Two},
     [MENUITEM_BATTLE_SPEED]            = {DrawChoices_BattleSpeed,       ProcessInput_Options_Three},
-    [MENUITEM_BATTLE_DARK_UI]          = {DrawChoices_DarkUi,            ProcessInput_Options_Two},
     [MENUITEM_BATTLE_PARTY_MENU_STYLE] = {DrawChoices_PartyMenuStyle,    ProcessInput_Options_Two},
+    [MENUITEM_BATTLE_DARK_UI]          = {DrawChoices_DarkUi,            ProcessInput_Options_Two},
 };
 
 struct // MENU_SOUND
@@ -340,8 +340,8 @@ static const u8 sText_OptionNewBackgrounds[]      = _("BATTLE TERRAIN");
 static const u8 sText_OptionNewBattleUI[]         = _("BATTLE UI");
 static const u8 sText_GenOneRecharge[]           = _("RECHARGE MOVES");
 static const u8 sText_OptionBattleSpeed[]        = _("BATTLE SPEED");
-static const u8 sText_OptionDarkUi[]             = _("DARK UI");
 static const u8 sText_OptionPartyMenuStyle[]     = _("PARTY MENU");
+static const u8 sText_OptionDarkUi[]             = _("DARK UI");
 static const u8 sText_OptionRunType[]             = _("QUICK RUN");
 static const u8 sText_AutorunEnable_Surf[]        = _("AUTORUN (SURF)");
 static const u8 sText_AutorunEnable_Dive[]        = _("AUTORUN (DIVE)");
@@ -379,8 +379,8 @@ static const u8 *const sOptionMenuItemsNamesCustom[MENUITEM_BATTLE_COUNT] =
     [MENUITEM_BATTLE_NEW_BATTLEUI]     = sText_OptionNewBattleUI,
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]      = sText_GenOneRecharge,
     [MENUITEM_BATTLE_SPEED]            = sText_OptionBattleSpeed,
-    [MENUITEM_BATTLE_DARK_UI]          = sText_OptionDarkUi,
     [MENUITEM_BATTLE_PARTY_MENU_STYLE] = sText_OptionPartyMenuStyle,
+    [MENUITEM_BATTLE_DARK_UI]          = sText_OptionDarkUi,
 };
 
 static const u8 sText_OptionMusic[]                  = _("MUSIC");
@@ -454,8 +454,8 @@ static bool8 CheckConditions(int selection)
         case MENUITEM_BATTLE_NEW_BACKGROUNDS: return TRUE;
         case MENUITEM_BATTLE_NEW_BATTLEUI:    return TRUE;
         case MENUITEM_BATTLE_GEN_ONE_RECHARGE: return TRUE;
-        case MENUITEM_BATTLE_DARK_UI:         return TRUE;
         case MENUITEM_BATTLE_PARTY_MENU_STYLE: return TRUE;
+        case MENUITEM_BATTLE_DARK_UI:         return TRUE;
         }
     case MENU_SOUND:
         switch(selection)
@@ -556,10 +556,10 @@ static const u8 sText_Desc_BattleSpeed1x[]         = _("Battle animations and de
 static const u8 sText_Desc_BattleSpeed2x[]         = _("Battle animations and delays run\nat double speed. Hold {L_BUTTON} for 1x.");
 static const u8 sText_Desc_BattleSpeed3x[]         = _("Battle animations and delays run\nat triple speed. Hold {L_BUTTON} for 1x.");
 static const u8 sText_Desc_NewBackgrounds_New[]     = _("Modernized battle terrain\nbackgrounds, from HnS.");
-static const u8 sText_Desc_DarkUi_Light[]          = _("Original light-colored battle\nand BAG interface.");
-static const u8 sText_Desc_DarkUi_Dark[]           = _("Dark-colored battle and BAG\ninterface.");
 static const u8 sText_Desc_PartyMenuStyle_Hns[]    = _("Original two-column party menu.");
 static const u8 sText_Desc_PartyMenuStyle_Swsh[]   = _("Modernized single-column party\nmenu, from Sword/Shield.");
+static const u8 sText_Desc_DarkUi_Light[]          = _("Original light-colored battle\nand BAG interface.");
+static const u8 sText_Desc_DarkUi_Dark[]           = _("Dark-colored battle and BAG\ninterface.");
 static const u8 *const sOptionMenuItemDescriptionsCustom[MENUITEM_BATTLE_COUNT][4] =
 {
 
@@ -574,8 +574,8 @@ static const u8 *const sOptionMenuItemDescriptionsCustom[MENUITEM_BATTLE_COUNT][
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]  = {sText_Desc_GenThreeRecharge,          sText_Desc_GenOneRecharge},
     [MENUITEM_BATTLE_RUN_TYPE]            = {sText_Desc_Run_Type_Off,             sText_Desc_Run_Type_LR,             sText_Desc_Run_Type_B,         sText_Desc_Run_Type_B_2},
     [MENUITEM_BATTLE_SPEED]               = {sText_Desc_BattleSpeed1x,            sText_Desc_BattleSpeed2x,           sText_Desc_BattleSpeed3x},
-    [MENUITEM_BATTLE_DARK_UI]             = {sText_Desc_DarkUi_Light,             sText_Desc_DarkUi_Dark},
     [MENUITEM_BATTLE_PARTY_MENU_STYLE]    = {sText_Desc_PartyMenuStyle_Hns,        sText_Desc_PartyMenuStyle_Swsh},
+    [MENUITEM_BATTLE_DARK_UI]             = {sText_Desc_DarkUi_Light,             sText_Desc_DarkUi_Dark},
 };
 
 static const u8 sText_Desc_SoundMono[]                       = _("Sound is the same in all speakers.\nRecommended for original hardware.");
@@ -646,8 +646,8 @@ static const u8 *const sOptionMenuItemDescriptionsDisabledCustom[MENUITEM_BATTLE
     [MENUITEM_BATTLE_GEN_ONE_RECHARGE]  = sText_Empty,
     [MENUITEM_BATTLE_RUN_TYPE]            = sText_Empty,
     [MENUITEM_BATTLE_SPEED]               = sText_Empty,
-    [MENUITEM_BATTLE_DARK_UI]             = sText_Empty,
     [MENUITEM_BATTLE_PARTY_MENU_STYLE]    = sText_Empty,
+    [MENUITEM_BATTLE_DARK_UI]             = sText_Empty,
 };
 
 static const u8 *const sOptionMenuItemDescriptionsDisabledSound[MENUITEM_SOUND_COUNT] =
@@ -932,6 +932,7 @@ void CB2_InitOptionPlusMenu(void)
         if (sOptions->sel_battle[MENUITEM_BATTLE_SPEED] >= OPTIONS_BATTLE_SPEED_COUNT)
             sOptions->sel_battle[MENUITEM_BATTLE_SPEED] = OPTIONS_BATTLE_SPEED_1X;
         sOptions->sel_battle[MENUITEM_BATTLE_DARK_UI]           = VarGet(VAR_DARK_UI) != 0;
+
         {
             u16 partyMenuStyleStored = VarGet(VAR_PARTY_MENU_STYLE);
             if (partyMenuStyleStored == 0 || partyMenuStyleStored - 1 >= PARTY_MENU_STYLE_COUNT)
@@ -1181,8 +1182,8 @@ static void Task_OptionMenuSave(u8 taskId)
     gSaveBlock2Ptr->optionsGenOneRecharge  = sOptions->sel_battle[MENUITEM_BATTLE_GEN_ONE_RECHARGE];
     gSaveBlock2Ptr->optionsRunType          = sOptions->sel_battle[MENUITEM_BATTLE_RUN_TYPE];
     VarSet(VAR_BATTLE_SPEED, sOptions->sel_battle[MENUITEM_BATTLE_SPEED]);
-    VarSet(VAR_DARK_UI, sOptions->sel_battle[MENUITEM_BATTLE_DARK_UI]);
     VarSet(VAR_PARTY_MENU_STYLE, sOptions->sel_battle[MENUITEM_BATTLE_PARTY_MENU_STYLE] + 1);
+    VarSet(VAR_DARK_UI, sOptions->sel_battle[MENUITEM_BATTLE_DARK_UI]);
 
     gSaveBlock2Ptr->optionsSound            = sOptions->sel_sound[MENUITEM_SOUND_SOUND];
     gSaveBlock2Ptr->optionsMusicOnOff       = sOptions->sel_sound[MENUITEM_SOUND_MUSIC];
@@ -2134,19 +2135,6 @@ static void DrawChoices_BattleSpeed(int selection, int y)
     DrawOptionMenuChoice(sText_OverworldSpeed3x, GetStringRightAlignXOffset(1, sText_OverworldSpeed3x, 198), y, styles[2], active);
 }
 
-static const u8 sText_UiLight[] = _("LIGHT");
-static const u8 sText_UiDark[]  = _("DARK");
-
-static void DrawChoices_DarkUi(int selection, int y)
-{
-    bool8 active = CheckConditions(MENUITEM_BATTLE_DARK_UI);
-    u8 styles[2] = {0};
-    styles[selection] = 1;
-
-    DrawOptionMenuChoice(sText_UiLight, 104, y, styles[0], active);
-    DrawOptionMenuChoice(sText_UiDark, GetStringRightAlignXOffset(1, sText_UiDark, 198), y, styles[1], active);
-}
-
 static const u8 sText_PartyMenuStyleHns[]  = _("CLASSIC");
 static const u8 sText_PartyMenuStyleSwsh[] = _("SWSH");
 
@@ -2158,6 +2146,19 @@ static void DrawChoices_PartyMenuStyle(int selection, int y)
 
     DrawOptionMenuChoice(sText_PartyMenuStyleHns, 104, y, styles[0], active);
     DrawOptionMenuChoice(sText_PartyMenuStyleSwsh, GetStringRightAlignXOffset(1, sText_PartyMenuStyleSwsh, 198), y, styles[1], active);
+}
+
+static const u8 sText_UiLight[] = _("LIGHT");
+static const u8 sText_UiDark[]  = _("DARK");
+
+static void DrawChoices_DarkUi(int selection, int y)
+{
+    bool8 active = CheckConditions(MENUITEM_BATTLE_DARK_UI);
+    u8 styles[2] = {0};
+    styles[selection] = 1;
+
+    DrawOptionMenuChoice(sText_UiLight, 104, y, styles[0], active);
+    DrawOptionMenuChoice(sText_UiDark, GetStringRightAlignXOffset(1, sText_UiDark, 198), y, styles[1], active);
 }
 
 static void DrawChoices_Autorun_Surf(int selection, int y)

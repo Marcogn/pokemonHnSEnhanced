@@ -1,6 +1,7 @@
 #include "global.h"
 #include "battle.h"
 #include "battle_anim.h"
+#include "battle_bg.h"
 #include "battle_controllers.h"
 #include "battle_message.h"
 #include "battle_setup.h"
@@ -3097,10 +3098,39 @@ static void ChooseTypeOfMoveUsedString(u8 *dst)
     }
 }
 
+// The battle command windows (action menu, move list, PP, yes/no, ...) are
+// recoloured for the Dark UI. Ported from Soulgold
+// (../soulgold/src/battle_message.c); B_CATCH_OR_NOT and B_WIN_POST_CATCH_MENU
+// are omitted because HnS has no such windows.
+static bool32 IsDarkBattleCommandWindow(u8 windowId)
+{
+    if (!IsDarkUiEnabled())
+        return FALSE;
+
+    switch (windowId)
+    {
+    case B_WIN_ACTION_MENU:
+    case B_WIN_MOVE_NAME_1:
+    case B_WIN_MOVE_NAME_2:
+    case B_WIN_MOVE_NAME_3:
+    case B_WIN_MOVE_NAME_4:
+    case B_WIN_PP:
+    case B_WIN_PP_REMAINING:
+    case B_WIN_MOVE_TYPE:
+    case B_WIN_SWITCH_PROMPT:
+    case B_WIN_YESNO:
+    case B_WIN_MOVE_DESCRIPTION:
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
+
 void BattlePutTextOnWindow(const u8 *text, u8 windowId)
 {
     const struct BattleWindowText *textInfo = sBattleTextOnWindowsInfo[gBattleScripting.windowsType];
     bool32 copyToVram;
+    bool32 darkCommandWindow;
     struct TextPrinterTemplate printerTemplate;
     u8 speed;
 
@@ -3110,10 +3140,11 @@ void BattlePutTextOnWindow(const u8 *text, u8 windowId)
         copyToVram = FALSE;
     }
     else
-    {
-        FillWindowPixelBuffer(windowId, textInfo[windowId].fillValue);
         copyToVram = TRUE;
-    }
+
+    darkCommandWindow = IsDarkBattleCommandWindow(windowId);
+    if (copyToVram)
+        FillWindowPixelBuffer(windowId, darkCommandWindow ? PIXEL_FILL(BATTLE_WINDOW_DARK_BG_PAL_INDEX) : textInfo[windowId].fillValue);
 
     printerTemplate.currentChar = text;
     printerTemplate.windowId = windowId;
@@ -3125,9 +3156,18 @@ void BattlePutTextOnWindow(const u8 *text, u8 windowId)
     printerTemplate.letterSpacing = textInfo[windowId].letterSpacing;
     printerTemplate.lineSpacing = textInfo[windowId].lineSpacing;
     printerTemplate.unk = 0;
-    printerTemplate.fgColor = textInfo[windowId].fgColor;
-    printerTemplate.bgColor = textInfo[windowId].bgColor;
-    printerTemplate.shadowColor = textInfo[windowId].shadowColor;
+    if (darkCommandWindow)
+    {
+        printerTemplate.fgColor = BATTLE_WINDOW_DARK_FG_PAL_INDEX;
+        printerTemplate.bgColor = BATTLE_WINDOW_DARK_BG_PAL_INDEX;
+        printerTemplate.shadowColor = BATTLE_WINDOW_DARK_SHADOW_PAL_INDEX;
+    }
+    else
+    {
+        printerTemplate.fgColor = textInfo[windowId].fgColor;
+        printerTemplate.bgColor = textInfo[windowId].bgColor;
+        printerTemplate.shadowColor = textInfo[windowId].shadowColor;
+    }
 
     if (printerTemplate.x == 0xFF)
     {

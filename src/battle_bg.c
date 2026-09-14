@@ -36,6 +36,56 @@ struct BattleBackground
     const void *palette;
 };
 
+#define BATTLE_MESSAGE_TEXT_PAL_NUM 12
+
+// The battle message window gets its own palette slot so the dark UI can
+// recolour the text and its background without touching the shared textbox
+// palette. Ported verbatim from Soulgold (../soulgold/src/battle_bg.c).
+static const u16 sBattleMessageTextPalette[] =
+{
+    [0]  = RGB(0, 0, 0),
+    [1]  = RGB(3, 3, 3),     // Default text foreground
+    [2]  = RGB(14, 0, 0),    // Attack shadow
+    [3]  = RGB(31, 12, 12),  // Attack
+    [4]  = RGB(2, 6, 16),    // Defense shadow
+    [5]  = RGB(11, 18, 31),  // Defense
+    [6]  = RGB(26, 26, 25),  // Default text shadow
+    [7]  = RGB(15, 0, 10),   // Sp. Atk shadow
+    [8]  = RGB(31, 12, 23),  // Sp. Atk
+    [9]  = RGB(0, 10, 16),   // Sp. Def shadow
+    [10] = RGB(10, 25, 31),  // Sp. Def
+    [11] = RGB(0, 12, 0),    // Speed shadow
+    [12] = RGB(13, 28, 11),  // Speed
+    [13] = RGB(31, 24, 8),   // Accuracy / all stats
+    [14] = RGB(20, 14, 31),  // Evasiveness
+    [15] = RGB(31, 31, 31),  // Textbox background
+};
+
+static const u16 sDarkBattleCommandPalette[] =
+{
+    [1]  = RGB_WHITE,
+    [6]  = RGB(1, 1, 1),
+    [8]  = RGB(18, 18, 18),
+    [10] = RGB_WHITE,
+    [14] = DARK_BATTLE_UI_BG_COLOR,
+    [15] = DARK_BATTLE_UI_BG_COLOR,
+};
+
+// Entries read out of VRAM (BG0 char base 0): the cursor is tiles 1 and 2, whose
+// pixels are 1 for the tile background, 9 for the arrow body and 7 for its
+// lower-right edge; tile 0x16, which erases a cursor, is solid 14.
+static const u16 sDarkBattleCursorPalette[16] =
+{
+    [1]  = DARK_BATTLE_UI_BG_COLOR,
+    [7]  = RGB(18, 18, 18),
+    [9]  = RGB_WHITE,
+    [14] = DARK_BATTLE_UI_BG_COLOR,
+};
+
+static const u16 sDarkBattleUiBgColor = DARK_BATTLE_UI_BG_COLOR;
+static const u16 sDarkBattleTextColor = RGB_WHITE;
+static const u16 sDarkBattleTextShadowColor = RGB(1, 1, 1);
+
 // .rodata
 static const u16 sUnrefArray[] = {0x0300, 0x0000}; //OamData?
 
@@ -170,7 +220,7 @@ static const struct WindowTemplate sStandardBattleWindowTemplates[] =
         .tilemapTop = 15,
         .width = 26,
         .height = 4,
-        .paletteNum = 0,
+        .paletteNum = BATTLE_MESSAGE_TEXT_PAL_NUM,
         .baseBlock = 0x0090,
     },
     [B_WIN_ACTION_PROMPT] = {
@@ -179,7 +229,7 @@ static const struct WindowTemplate sStandardBattleWindowTemplates[] =
         .tilemapTop = 35,
         .width = 14,
         .height = 4,
-        .paletteNum = 0,
+        .paletteNum = BATTLE_COMMAND_PAL_NUM,
         .baseBlock = 0x01c0,
     },
     [B_WIN_ACTION_MENU] = {
@@ -427,7 +477,7 @@ static const struct WindowTemplate sBattleArenaWindowTemplates[] =
         .tilemapTop = 15,
         .width = 26,
         .height = 4,
-        .paletteNum = 0,
+        .paletteNum = BATTLE_MESSAGE_TEXT_PAL_NUM,
         .baseBlock = 0x0090,
     },
     [B_WIN_ACTION_PROMPT] = {
@@ -436,7 +486,7 @@ static const struct WindowTemplate sBattleArenaWindowTemplates[] =
         .tilemapTop = 35,
         .width = 14,
         .height = 4,
-        .paletteNum = 0,
+        .paletteNum = BATTLE_COMMAND_PAL_NUM,
         .baseBlock = 0x01c0,
     },
     [B_WIN_ACTION_MENU] = {
@@ -938,7 +988,23 @@ void LoadBattleMenuWindowGfx(void)
 {
     LoadUserWindowBorderGfx(2, 0x12, BG_PLTT_ID(1));
     LoadUserWindowBorderGfx(2, 0x22, BG_PLTT_ID(1));
-    LoadCompressedPalette(IsDarkUiEnabled() ? gBattleWindowTextPalette_Dark : gBattleWindowTextPalette, BG_PLTT_ID(5), PLTT_SIZE_4BPP);
+    LoadCompressedPalette(gBattleWindowTextPalette, BG_PLTT_ID(5), PLTT_SIZE_4BPP);
+    LoadPalette(sBattleMessageTextPalette, BG_PLTT_ID(BATTLE_MESSAGE_TEXT_PAL_NUM), PLTT_SIZE_4BPP);
+    if (IsDarkUiEnabled())
+    {
+        LoadPalette(sDarkBattleCommandPalette, BG_PLTT_ID(BATTLE_COMMAND_PAL_NUM), PLTT_SIZE_4BPP);
+        LoadPalette(sDarkBattleCursorPalette, BG_PLTT_ID(BATTLE_CURSOR_PAL_NUM), PLTT_SIZE_4BPP);
+        LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(0) + 15, PLTT_SIZEOF(1));
+        LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(1) + 14, PLTT_SIZEOF(1));
+        LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(5) + BATTLE_WINDOW_DARK_BG_PAL_INDEX, PLTT_SIZEOF(1));
+        LoadPalette(&sDarkBattleTextColor, BG_PLTT_ID(BATTLE_MESSAGE_TEXT_PAL_NUM) + 1, PLTT_SIZEOF(1));
+        LoadPalette(&sDarkBattleTextShadowColor, BG_PLTT_ID(BATTLE_MESSAGE_TEXT_PAL_NUM) + 6, PLTT_SIZEOF(1));
+        LoadPalette(&sDarkBattleUiBgColor, BG_PLTT_ID(BATTLE_MESSAGE_TEXT_PAL_NUM) + 15, PLTT_SIZEOF(1));
+    }
+    else
+    {
+        LoadCompressedPalette(gBattleTextboxPalette, BG_PLTT_ID(BATTLE_COMMAND_PAL_NUM), PLTT_SIZE_4BPP);
+    }
 
     if (gBattleTypeFlags & BATTLE_TYPE_ARENA)
     {
@@ -1354,7 +1420,7 @@ void LoadBattleTextboxAndBackground(void)
     LZDecompressVram(gBattleTextboxTiles, (void *)(BG_CHAR_ADDR(0)));
     CopyToBgTilemapBuffer(0, gBattleTextboxTilemap, 0, 0);
     CopyBgTilemapBufferToVram(0);
-    LoadCompressedPalette(IsDarkUiEnabled() ? gBattleTextboxPalette_Dark : gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
+    LoadCompressedPalette(gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
     LoadBattleMenuWindowGfx();
     DrawMainBattleBackground();
 }
@@ -1713,7 +1779,7 @@ bool8 LoadChosenBattleElement(u8 caseId)
         CopyBgTilemapBufferToVram(0);
         break;
     case 2:
-        LoadCompressedPalette(IsDarkUiEnabled() ? gBattleTextboxPalette_Dark : gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
+        LoadCompressedPalette(gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
         break;
     case 3:
         if (gBattleTypeFlags & (BATTLE_TYPE_FRONTIER | BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK | BATTLE_TYPE_EREADER_TRAINER))

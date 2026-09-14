@@ -208,11 +208,7 @@ Re-measure after each phase lands and update the table below.
 | 1 — overworld speed | 261168 B (99.63%, unchanged) | 976 B | 22505896 B (67.07%, +480 B) |
 | 2 — battle speed | 261168 B (99.63%, unchanged) | 976 B | 22506852 B (67.08%, +956 B from Phase 1) |
 | 3 — dark/light UI | 261168 B (99.63%, unchanged) | 976 B | 22507816 B (67.08%, +964 B from Phase 2) |
-| 4a — comfy_anim (heap-allocated) | 261172 B (99.63%, +4 B: the `gComfyAnims` pointer itself) | 972 B | 22508968 B (67.08%, +1152 B from Phase 3) |
-| 4b — dispatch layer, HnS-classic only | 261172 B (99.63%, unchanged) | 972 B | 22509912 B (67.08%, +944 B: 65 tiny forwarding functions) |
-| 4c — swsh_party_menu.c/.h port, `make modern` clean (0 errors, 0 warnings, 0 undefined references) | 261276 B (99.67%, +104 B from 4b) | 868 B | 22582824 B (67.30%, +72912 B from 4b) |
-| 4d — live dispatch (both variants) + `VAR_PARTY_MENU_STYLE` option | 261276 B (99.67%, unchanged: `VarGet`/`VarSet`-only, no new statics) | 868 B | 22585320 B (67.31%, +2496 B from 4c) |
-| 4e-4f — reproduce remaining HnS-specific behaviour, holistic review | _pending, see §5.7_ | | |
+| 4 — party menu | _pending_ | | |
 
 ### 1.3 Commit hygiene
 
@@ -887,95 +883,182 @@ reasoning about the numbers again:
 * Verified with `make modern`: 0 errors, 0 new warnings, ROM size decreased
   slightly (removed dead palette data) instead of growing.
 
-### 4.8 Post-release addition — Soulgold's Bag starfield background
 
-The user asked for Soulgold's actual Bag background art, having noticed HnS's
-Bag was a flat color behind the foreground UI where Soulgold shows a
-starfield. Traced instead of guessed:
+### 4.8 Faithful re-port (2026-09-14) — what transfers from Soulgold and what does not
 
-* Soulgold's Bag uses **4** BGs, not HnS's 3: `sBgTemplates_ItemMenu` has a
-  `.bg = 3` entry (`charBaseIndex = 3`, `mapBaseIndex = 28`, `priority = 3`,
-  the lowest — furthest back) that HnS's own template array never had. There
-  is no per-frame scroll task anywhere in Soulgold's `item_menu.c` despite
-  the name `BAG_MENU_BG_SCROLLING` — it is a static background, not an
-  animation, that shows through wherever a higher-priority BG's tile pixels
-  are palette index 0 (the GBA's native per-tile transparency for regular
-  BGs). Confirmed by rendering both Soulgold's foreground tilemap and this
-  one from raw source (tiles from `menu.png`, tilemap from `.bin`, palette
-  from `.pal`) into actual PNGs before writing any code — the foreground's
-  "empty" areas are bright green (Soulgold's transparency marker colour) and
-  exactly the size/shape of where the starfield tilemap renders a genuine
-  navy sky full of stars.
-* Soulgold's `.bg = 2` and `.bg = 3` share `charBaseIndex = 3` (the same
-  tile graphics, just two different tilemaps), and the starfield only
-  references tile IDs 64–77 of Soulgold's 80-tile `menu.png` (which is
-  128×40 — one row of 16 tiles taller than HnS's 128×32) — the 14 extra
-  tiles HnS's sheet doesn't have. All 1024 tilemap entries use Soulgold's
-  own palette bank 0 (`menu_male.pal` indices 0–15), the same bank as the
-  rest of the Bag chrome.
-* **First attempt (wrong): a separate char base for the star tiles.** To
-  avoid touching HnS's existing (already dark-mode-corrected) foreground
-  tileset/tilemap, the 14 star tiles were first extracted into their own
-  standalone 16-tile sheet on an unused `charBaseIndex`/`BG_PLTT_ID` — a
-  cleaner-looking separation than Soulgold's own shared-char-base design.
-  This built fine and looked correct in every static check (palette bytes,
-  tile bytes and tilemap bytes were all verified correct in ROM and in
-  live VRAM via a headless mGBA harness with the user's own real save),
-  but the Bag screen still rendered no stars. Chased that for a long time
-  as a VRAM/decompression bug (tried `LZDecompressVram`, plain `CpuCopy16`,
-  raw `RequestDma3Copy`, different char blocks — all wrote the exact same
-  bytes) before realizing the "garbage" byte pattern being read back
-  (`0xAA` repeating) was never garbage at all: it's the correct, legitimate
-  flat-navy-sky fill color the star tiles mostly consist of. The data was
-  right the entire time; a separate char base was simply never the actual
-  problem.
-* **Real cause: `menu.bin` has zero transparent tiles in the visible
-  viewport.** Dumping HnS's own foreground tilemap (`graphics/bag/menu.bin`)
-  showed tile 0 (genuinely blank, all-index-0) is used 424 times — but
-  *only* outside the visible 30×20 tile viewport (the padding on a 32×32
-  screen block). Every one of the visible tiles is opaque; tile 2 (a subtle
-  two-tone stripe fill) and tile 17 (a flat fill) alone cover most of the
-  screen. Unlike Soulgold's own layout, HnS's Bag foreground was drawn with
-  no transparent gaps at all, so a correctly-loaded, correctly-enabled BG3
-  underneath it has nothing to show through — confirmed by manually
-  reading back the live palette (RGB, not just index) at those exact pixel
-  coordinates: it matched HnS's own light-grey chrome color exactly, not
-  black or garbage. There was no rendering bug to fix here, only a design
-  fact to work around.
-* **Fix: blank tiles 2 and 17, but in a Bag-menu-only copy of the
-  graphic.** `gBagScreen_Gfx` (`menu.4bpp`) is also loaded by
-  `battle_pyramid_bag.c` for the Battle Pyramid's own Bag screen, using its
-  own tilemap (`menu_pyramid.bin`) that relies on those same tiles 2/17
-  being opaque (confirmed: it uses tile 2 135 times and tile 17 240 times).
-  Blanking them in the shared asset would have broken that unrelated
-  screen. Instead, a new `graphics/bag/menu_with_stars.png` (128×40) was
-  created: a copy of `menu.png` with the 14 star tiles appended as tiles
-  64–77 (exactly as in the "first attempt" above, this part is unchanged)
-  *and* tiles 2/17 zeroed out. A new symbol, `gBagScreenWithStars_Gfx`,
-  replaces `gBagScreen_Gfx` only in `item_menu.c`'s own `LoadBagMenu_Graphics`;
-  `graphics.c`'s `gBagScreen_Gfx` and `battle_pyramid_bag.c` are untouched.
-* Matching Soulgold, `.bg = 3`'s template uses `charBaseIndex = 3` (shared
-  with `.bg = 2`, since the star tiles are now part of the same
-  `gBagScreenWithStars_Gfx` blob loaded for BG2) and `mapBaseIndex = 28`
-  (verified free — HnS's own BG0–2 use 29–31) with its own palette at
-  `BG_PLTT_ID(2)` (also verified free — the Bag's own code only ever
-  touches banks 0–1 for its chrome and 12–15 for shared menu/message
-  windows). Because the tile graphics are shared with BG2's own load, no
-  second `struct BagMenu` tilemap buffer or extra VRAM copy is needed for
-  them — only the (separate) tilemap and palette are loaded for BG3, both
-  directly into VRAM with `LZDecompressVram`/`LoadCompressedPalette`,
-  matching how HnS's own battle terrain backgrounds load static BGs
-  (`LoadBattleEnvironmentGfx` in `battle_bg.c`).
-* No dark-mode variant was created for the starfield, matching Soulgold: it
-  never swaps this palette for Dark UI either (only the two chrome banks at
-  `BG_PLTT_ID(0)` get a dark variant) — the sky is already dark enough to
-  read fine under both Light and Dark UI.
-* Verified with `make modern` (0 errors, 0 new warnings, EWRAM/IWRAM
-  unchanged from §4.7) *and*, this time, with an actual headless-emulator
-  screenshot against the user's own real save file (autoloaded via mGBA's
-  Python bindings), in both Light and Dark UI, confirming real navy-blue
-  stars render behind the item list rather than trusting the palette/VRAM
-  bytes alone.
+The Dark UI was re-ported against Soulgold line by line and then verified in
+mGBA (`VAR_DARK_UI` toggled from the in-game Options menu and, for the
+screenshots, poked directly into `gSaveBlock1Ptr->vars[]`). Result: **the
+control flow ports verbatim, the palette *indices* do not.**
+
+Ported verbatim from Soulgold, unchanged:
+
+* `include/battle_bg.h`: `BATTLE_COMMAND_PAL_NUM 13`,
+  `BATTLE_WINDOW_DARK_BG_PAL_INDEX 8`, `_FG_ 14`, `_SHADOW_ 13`.
+* `src/battle_bg.c`: `sBattleMessageTextPalette`, `sDarkBattleCommandPalette`,
+  `sDarkBattleUiBgColor/TextColor/TextShadowColor`, the four window templates
+  moved off `paletteNum = 0` onto slots 12/13, and the whole of
+  `LoadBattleMenuWindowGfx` including its per-index `LoadPalette` overrides.
+* `src/battle_controller_player.c`: the four move/action cursor sites
+  (`... |= BATTLE_COMMAND_PAL_NUM << 12`, destroy uses
+  `(BATTLE_COMMAND_PAL_NUM << 12) | 0x16`).
+* `src/battle_script_commands.c`: `sLevelUpWindowTextColors` and the yes/no
+  cursor pair. (`BattleCreate/DestroyPostCatchMenuCursorAt` and
+  `...CatchOrNotCursorAt` have no HnS counterpart — omitted, not forgotten.)
+* `src/battle_message.c`: `IsDarkBattleCommandWindow` + the
+  `FillWindowPixelBuffer`/text-colour override in `BattlePutTextOnWindow`.
+  `B_CATCH_OR_NOT` / `B_WIN_POST_CATCH_MENU` omitted for the same reason.
+* `src/item_menu.c`: all six dark-Bag palettes, `PrepareDarkBagHmIconGfx`,
+  `COLORID_TMHM_INFO_DARK`, and the five call sites.
+
+Deliberately **not** ported, with reasons:
+
+* `src/palette.c` — `TimeMixBattleBgPalette` is expansion DNS code; HnS has no
+  such function.
+* `src/battle_interface.c` — `IsDarkHealthbox`, `RemapHealthbarGfxIndexes`,
+  `CopyHealthbarGfx`, `CopyStatusIconGfx`. These exist in Soulgold only
+  because its `dark_healthbox.gbapal` repurposes palette entries 1/3 (used by
+  the healthbar gfx) and ships status-icon art authored in *dark* indices.
+  HnS' healthbox art is different (and doubled: Gen 3 / Gen 4 skins), its
+  status icons are light-authored, and its bar colours do not collide.
+  Probing palette RAM live confirmed no remap is needed.
+
+**The one thing that does not transfer: which palette index is the window
+body.** Soulgold's battle textbox uses index 15 for the message-box fill, so
+overriding `BG_PLTT_ID(0) + 15` is enough there. Live probing showed HnS' own
+`textbox.gbapal` does the same for the message box — good — but *not* for the
+Bag, where the item-list panel is BG index 9 and its frame index 10. A literal
+port therefore leaves the Bag's list panel cream-coloured. The fix is at the
+asset level, in HnS' own `graphics/bag/menu_{male,female}_dark.pal`:
+index 9 -> `40 40 40` (panel body), index 10 -> `189 156 90` (gold frame),
+index 26 -> `40 40 40`.
+
+Same class of problem on the healthbox: HnS draws the mon name, level and HP
+numbers with sprite-palette **index 1**, which the dark healthbox palettes had
+set to `12 12 12` — near-black text on a near-black box. Fixed by setting
+index 1 to `251 251 251` in both `ball_status_bar_dark.pal` and
+`ball_status_bargen3_dark.pal`.
+
+Also reverted from the first attempt: `gBattleTextboxPalette_Dark` (a whole
+second textbox palette) is gone. Soulgold always loads the light
+`gBattleTextboxPalette` and only overrides individual indices; now HnS does
+too, and the asset and its `extern` were deleted.
+
+Method note, worth reusing: to find which palette index paints a given region,
+write saturated marker colours into `gPlttBufferFaded` **and**
+`gPlttBufferUnfaded` (BG base `0x0201cf7c` / `0x0201cb7c` in the current
+build; OBJ starts `+0x200`), run three frames, screenshot. One run identifies
+every index at once. To decode many indices in one shot, set entry *i*
+to `RGB(i, 0, 31 - i)` and read *i* back from the rendered red channel. `gSaveBlock1Ptr->vars[]` is at SaveBlock1 **+0x1490** in
+this build — *not* the `/*0x139C*/` comment in `include/global.h`, which is
+stale; derive it by diffing memory around an in-game option toggle.
+
+### 4.9 Second round of index collisions (2026-09-14)
+
+Three more places where HnS' art uses pixel indices a Soulgold-shaped palette
+leaves at 0, found by playtest and confirmed with the probe above:
+
+* **Pocket indicator squares.** Soulgold's `sDarkBagPocketIndicator*Palette`
+  fill only entries 0/1/9 because its tiles (`0xC` / `0x34`) use them. HnS'
+  tiles (`0x17` / `0x2B`) use 10 and 12-14, so the active square rendered
+  black and the inactive ones near-black. Both palettes now carry the
+  indicator colour on every entry except 0 (the tile background); that also
+  makes them immune to any later tile change.
+* **Bag palette index 10.** Darkening it to `189 156 90` in §4.8 flattened the
+  Poké Ball icon, whose highlight is index 10 and whose ring is index 14/20 —
+  same colour, no shape. Now `232 203 133`, brighter than the ring.
+* **Move-category icon.** `sSplitIcons_Pal` / `sSplitIconsEmpty_Pal` paint the
+  backdrop behind the icon white (index 7, shaded by 9). Invisible on the
+  light move window, a white box on the dark one that also covered the first
+  `P` of `PP`. `MoveSelectionDisplaySplitIcon` now overrides those two entries
+  with `DARK_BATTLE_UI_BG_COLOR`, which moved from `src/battle_bg.c` to
+  `include/battle_bg.h` so `battle_controller_player.c` can use it.
+
+Also checked and **not** a problem: the day/night blend. HnS blends BG palettes
+0-12 (`PALETTES_MAP`) and untagged sprite palettes with the time of day, so the
+dark UI slots are in scope — but a night-time playtest (Bag, wild battle,
+command window, move list, healthboxes) showed no tinting artefacts, so
+Soulgold's `TimeMixBattleBgPalette` guard stays unported. Note for the future:
+HnS' day/night code lives in `src/overworld.c` (`UpdatePalettesWithTime`,
+`UpdateSpritePaletteWithTime`) and `src/palette.c`
+(`UpdateTimeOfDayPaletteFade`), not under the Soulgold name.
+
+To force night in the harness, run mGBA under a TZ that puts local time in the
+night window, e.g. `TZ=Pacific/Kiritimati`; check `gTimeOfDay` (`0x030037ce`,
+0 = night).
+
+### 4.10 The healthbox skin matters — test BOTH (2026-09-14)
+
+The round above was tested only with `optionsNewBattleUI == 0` (Gen 3
+healthboxes) and looked clean. A playtest on **Gen 4** showed a stark white box
+border and a white block where the selection cursor should be. Both are the
+same index collision, and both are skin-specific, so **every dark-UI change has
+to be checked on both healthbox skins.**
+
+* **Healthbox text vs. border.** `AddTextPrinterAndCreateWindowOnHealthbox`
+  prints with `color[1] = 1`. In the *Gen 3* art entry 1 is text only (the box
+  borders on 7/8), so `251 251 251` there is correct. In the *Gen 4* art entry 1
+  is text **and** the outer border, so the same value turned the border white.
+  The Gen 4 dark palette now puts the border back on `12 12 12` (Soulgold's own
+  value) and moves the text to entry 5 — spare in that skin, and the same entry
+  Soulgold frees in `dark_healthbox.gbapal`. `HEALTHBOX_DARK_TEXT_PAL_INDEX`
+  selects it, only when the dark UI and the Gen 4 skin are both on.
+* **Selection cursor.** Soulgold draws the cursor out of
+  `BATTLE_COMMAND_PAL_NUM`. HnS cannot: its cursor tiles (BG0 tiles 1 and 2) use
+  entry 1 as the *tile background*, and entry 1 of the command palette is
+  already the "What will X do?" prompt's text colour — one of them always
+  loses. The first attempt at this (dark entry 1) duly fixed the cursor and
+  blanked the prompt. The cursor now has its own slot,
+  `BATTLE_CURSOR_PAL_NUM 11` (free for the whole battle, verified by dumping all
+  16 BG palettes mid-battle), with 1 = background, 7 = arrow edge, 9 = arrow
+  body, 14 = the erase tile 0x16.
+* **Bag list and description text.** `WIN_ITEM_LIST` uses BG palette 1 and the
+  list menu draws with `cursorPal = 1` / `cursorShadowPal = 3`, i.e. palette
+  entries 17 and 19. The dark palette had 17 = `0 0 0` and 19 = `128 128 120`,
+  so every glyph on the Bag screen was a black fill with a light outline —
+  legible on the cream panel, invisible on the dark one. Swapped:
+  17 = `251 251 251`, 19 = `8 8 8`.
+
+Not changed, and worth recording because it was asked about: the battle text
+sits close to the window edge in light mode too. `git diff main` shows no
+window geometry (`tilemapLeft/Top`, `width/height`) or text placement
+(`.x/.y`, letter/line spacing, font) touched anywhere in this branch — that
+layout is HnS' own and predates the dark UI.
+
+### 4.11 Bag starfield — verified, and what it is not (2026-09-14)
+
+The branch behind PR #2 was rebuilt on top of the merged `main` (dark UI, SwSh
+menu, speed-ups all come from `main`; the branch's own older copies of those
+were dropped). What is left that is unique to it is exactly six files: the
+**starfield background** behind the Bag.
+
+Verified against Soulgold's source and assets:
+
+* **Mechanism matches.** Same four-BG setup, BG3 on `charBaseIndex = 3` (shared
+  with BG2), `mapBaseIndex = 28`, `priority = 3`, shown with `ShowBg(3)`. The
+  starfield tilemap is full-screen in Soulgold too; what makes it visible only
+  in the left column is the *foreground* tilemap's transparent tiles, not the
+  starfield's shape.
+* **Self-contained.** The 14 star tiles live in a separate copy of the tileset
+  (`menu_with_stars.png`, 128x40 vs 128x32) with only **tile 2** blanked to
+  transparent. `gBagScreen_Gfx` itself is untouched, so
+  `battle_pyramid_bag.c` — which loads it with a different tilemap that needs
+  those tiles opaque — still works.
+* **Two deviations from Soulgold, both deliberate.** Soulgold's stars sit on
+  the Bag's own palette banks; here they get their own palette at
+  `BG_PLTT_ID(2)`, which is free on this screen. And the tilemap goes straight
+  to VRAM (`LZDecompressVram` to `BG_SCREEN_ADDR(28)`) rather than through a
+  second `SetBgTilemapBuffer`, since nothing scrolls it.
+* **Playtested** in the emulator on all five pockets and the item submenu, in
+  both Light and Dark themes: consistent, no bleed-through into the item list
+  panel or the description window, no regression from the merged dark UI.
+
+**What it is not.** This is a background, not a port of Soulgold's Bag screen.
+Rendering Soulgold's own `menu.png` + `menu.bin` + `menu_male.pal` side by side
+with HnS' Bag makes that plain: Soulgold's layout, panel shapes, header, key
+item box and proportions are all different. Porting *that* means replacing HnS'
+Bag artwork and tilemap wholesale and re-deriving the dark theme on top of it —
+a much larger job than this branch, and not what this branch does.
 
 ---
 
@@ -1072,25 +1155,10 @@ switch, not three.
    Commit. This proves the dispatch layer before any new UI exists.
 3. Re-encode the SwSh graphics to LZ77, add `src/data/swsh_party_menu.h`. Build
    (assets only, nothing references them yet). Commit.
-4. **Done.** Add `src/swsh_party_menu.c` with the adapters. Expect this to be
-   the long part. Build. Commit.
-5. **Done, inline with step 4** (not a separate pass): every HnS-specific
-   behaviour difference found while fixing compile/link errors (field moves,
-   item effects, rare candy, EV-reduce items, TM/HM/tutor move-learning,
-   toss/register/trade messages, evolution triggering, frontier bans, …) was
-   reproduced exactly against HnS's real source as part of that same fix, not
-   deferred — see §5.6.1 for the full list.
-6. **Done.** Add the option entry + default: `VAR_PARTY_MENU_STYLE` (repurposes
-   `VAR_UNUSED_0x40A8`, no `SaveBlock1`/`SaveBlock2` field added, per §5.4),
-   `PARTY_MENU_STYLE_HNS`/`_SWSH`/`_COUNT`/`_DEFAULT` in
-   `include/constants/global.h`, a "PARTY MENU" entry on the MENU_CUSTOM
-   options page (`src/options_plus_menu.c`, mirrors `MENUITEM_BATTLE_DARK_UI`'s
-   2-choice pattern exactly), and the same `SetDefaultOptions()` +
-   `NewGameInitData()` carry-over pattern Battle Speed uses (§6.1), since the
-   default (SwSh) is not the "untouched var reads 0" case.
-   `src/party_menu_dispatch.c` now branches on `GetPartyMenuStyle()` for the
-   58 genuinely-per-variant functions and always calls the HnS-classic
-   implementation for the 6 that are shared (§5.6.1).
+4. Add `src/swsh_party_menu.c` with the adapters. Expect this to be the long
+   part. Build. Commit.
+5. Reproduce HnS-specific party behaviour in the SwSh variant. Commit.
+6. Add the option entry + default. Commit.
 
 ### 5.4 Option storage for the party style
 
@@ -1203,230 +1271,6 @@ comm -23 /tmp/swsh_calls.txt /tmp/hns_syms.txt
 (It reports ~86 names, including a handful of false positives from local
 statics and struct members — filter by hand.)
 
-**Correction, found while starting to land this phase:** the script above
-undercounts local statics — `swsh_party_menu.c` defines ~523 functions of its
-own (private helpers, `Task_*`, `CursorCb_*`, `SpriteCB_*`, etc.), and a naive
-`comm` against only HnS's headers reports all of them as "missing" too (543
-raw hits), since they're privately defined, not in any header. Subtracting
-`swsh_party_menu.c`'s own self-defined functions (extracted the same way as
-the `hns_syms` list, from the real function bodies rather than declarations)
-gets back down to a manageable, accurate **76** real gaps — close to the
-original ~86 estimate, confirming the estimate was sound; the discrepancy
-was in the script's filtering, not the underlying analysis. Re-run as:
-
-```sh
-# after the two commands above, also build a self-defined list and subtract it:
-# (extract every function actually defined — static or not — in swsh_party_menu.c
-# itself, the same regex-based approach used in §5.6, then:)
-comm -23 /tmp/swsh_calls.txt /tmp/hns_syms.txt > /tmp/missing.txt
-comm -23 /tmp/missing.txt /tmp/swsh_self_defined.txt > /tmp/missing_real.txt
-```
-
-Also broaden `hns_syms.txt` to `find include gflib -name '*.h' | xargs cat`
-(recursive), not just `include/*.h` — the flat glob misses `include/gba/*.h`
-and other subdirectories, producing a few more false "missing" hits (e.g.
-`BLDALPHA_BLEND`, which HnS already has in `include/gba/io_reg.h`, identical
-to Soulgold's).
-
-**The real 76, categorized by resolution (verified against HnS's current
-source, 2026-09-13):**
-
-* **Noise — not real symbols, ignore:** `blitFunc`, `fromSlot`, `item1`,
-  `item2`, `hwords`, `npcs` (local variables/parameters the regex
-  false-matched). `memcpy`, `memset` (libc, always available, just not
-  declared in a project header the script scans).
-* **Trivial (§5.2's own bucket):** `COMPOUND_STRING`, `Vector`, `YES`.
-* **Raw-field/array adapters — HnS uses direct struct/array access instead of
-  expansion-style getters, confirmed by reading the real fields:**
-  `GetMoveName` → `gMoveNames[move]` (`include/data.h:164`);
-  `GetMovePP`, presumably `GetSpeciesAbility` → `gBaseStats[species].abilities[i]`
-  (`include/pokemon.h:332`, field confirmed, exact getter still to write);
-  `GetItemPocket`/`GetItemEffect`/`GetItemHoldEffectParam`/`GetItemImportance`/
-  `GetItemSecondaryId`/`GetItemFieldFunc` → `gItems[item].pocket` /
-  `.holdEffect` / `.holdEffectParam` / `.importance` / `.secondaryId` /
-  `.fieldUseFunc` (`include/item.h:15-22`, all fields confirmed present);
-  `GetItemTMHMMoveId` → likely `ItemIdToBattleMoveId` (already dispatched,
-  §5.3 step 2) or `sTMHMMoves[]`, to confirm when writing the adapter;
-  `IsMoveHM` → HnS's own `IsMoveHm` (party_menu.h, case difference only);
-  `AddHeldItemToBag`/`RemoveHeldItemFromBag` → likely thin wrappers over
-  `AddBagItem`/`RemoveBagItem` (`include/item.h:49-50`, confirmed present);
-  `IsOnPlayerSide` → `GetBattlerSide(battler) == B_SIDE_PLAYER`
-  (`include/battle_anim.h:155`, `include/battle.h:16-17`, confirmed present);
-  `GetSelectedBoxMonFromPcOrParty` → some combination of
-  `StorageGetCurrentBox` (`include/pokemon_storage_system.h:41`, confirmed)
-  and the existing party selection state — exact shape still to trace.
-* **Confirmed HnS has an equivalent under a different name:**
-  `GetCurrentLevelCap` → `GetCurrentPartyLevelCap()`
-  (`include/tx_randomizer_and_challenges.h:106`, HnS's own nuzlocke/challenges
-  system) — `GetCurrentEVCap`/`GetCurrentExpCapType` likely have siblings in
-  the same header, to confirm.
-* **Confirmed genuinely absent — HnS has no such system at all (stub per
-  §5.2's rule, do not invent):** every `FollowerNPC*`/`PlayerHasFollowerNPC`/
-  `RefreshFollowingPokemon` symbol (`include/follower_npc.h` does not exist in
-  HnS — confirmed by direct file check, not just a grep miss);
-  `GetFormChangeTargetSpecies`/`TryFormChange`/`CanChangeMonPokeball`
-  (no `GetFormSpeciesId` or any form-change infrastructure found anywhere in
-  `include/`); `OpenPokedexPlusHGSSAtSpecies` (HnS's
-  `src/pokedex_plus_hgss.c` exists — check for the right entry point rather
-  than assuming absence, unlike the form-change case); pokerus display
-  (`ShouldPokemonShowActivePokerus`) — HnS's `include/pokemon.h` does
-  reference pokerus fields, so this one may resolve to a raw-field adapter
-  once traced, not a stub — do not assume "absent" without checking, per
-  the standing rule (§7 rule 11's lesson generalizes beyond just `VAR_`s).
-* **Still to trace when writing the actual adapters (not yet resolved,
-  listed here so the next session does not re-derive the raw list from
-  scratch):** `CanBoxMonRelearnMoves`, `CanBoxMonRelearnAnyMove`,
-  `CanLearnTeachableMove`, `CanItemBeTossed`, `CannotUseItemsInBattle`,
-  `CreateMonIcon2`, `CreateMonIconIsEgg`, `CurrentBattlePyramidLocation`,
-  `DecompressDataWithHeaderWram` (→ `LZDecompressWram`/`Vram`, per §5.2 —
-  mechanical, just needs every call site updated, not a new function),
-  `DisplayPartyPokemonDataForMoveTutorOrEvolutionItem` (HnS has this exact
-  name but as a `static` function private to `src/party_menu.c` — cannot be
-  called from `swsh_party_menu.c` directly; needs its own SwSh-side
-  reimplementation, not a call-through adapter), `FieldMove_GetMoveId`,
-  `FieldMove_GetPartyMsgID`, `SetUpFieldMove` (HnS's classic party menu has
-  its field-move logic written inline and differently structured — per
-  §5.2's last bullet, the field-move special-casing at
-  `src/party_menu.c:2678-2730` needs to be traced and reproduced, not
-  assumed to map 1:1 onto Soulgold's refactored `field_move.h` shape),
-  `GET_BASE_SPECIES_ID` (needs `GetFormSpeciesId` first, which does not
-  exist — likely stub to `speciesId` unchanged, pending the form-change
-  stub decision above), `GetFontIdToFit`, `GetSurfablePokemonPartySlot`,
-  `LoadSpritePaletteWithTag` (HnS's `gflib/sprite.h` only has
-  `LoadSpritePalette`, no tag-lookup variant — check `LoadCompressedSpriteSheet`-
-  adjacent helpers or write one), `MetatileBehavior_IsRockClimbable` (no
-  match anywhere in `include/` — Rock Climb may not exist as a HM in HnS at
-  all; verify before assuming a stub), `PokemonPC_SetReturnToPartyCallback`,
-  `TryDecrementMonLevel`.
-
-### 5.6.1 Implementation notes — landed, real deviations from §5.6's list above
-
-`src/swsh_party_menu.c` and `src/data/swsh_party_menu.h` now compile with
-`make modern`: 0 errors, 0 undefined references at link time, 0 warnings.
-Reached iteratively (build → `grep "error:"` → fix the highest-impact cluster
-→ rebuild), going from 610 raw errors after the initial copy down to 0 over
-several sessions. The §5.6 list above was a reasonable prediction; here is
-what was actually true once each item was traced against HnS's real source
-(never assumed from the name alone):
-
-* **`enum CanMoveBeLearned` cannot live in `include/constants/party_menu.h`
-  as a C `enum`.** That header is also pulled into `data/event_scripts.s`
-  through the project's asm preprocessor, which cannot parse `enum { ... }`
-  syntax at all (`bad instruction`, `junk at end of line`). Converted to
-  plain `#define CAN_LEARN_MOVE 0` / etc., matching every other constant in
-  that file — a reminder that *any* addition to a `constants/*.h` header
-  must stay assembler-safe, not just valid C, regardless of what the
-  matching Soulgold header looks like.
-* **`CanLearnTutorMove` must NOT go through the per-variant rename macro**
-  in `party_menu_variant.h`, unlike the other ~64 public functions on that
-  list. It backs a single shared implementation in `party_menu.c` (reading
-  the private `sTutorLearnsets` table from `data/pokemon/tutor_learnsets.h`,
-  which also defines the genuinely-shared `gTutorMoves`) and is called
-  directly by `scrcmd.c` and `pokedex_plus_hgss.c` outside the party menu
-  entirely. Renaming it split the symbol in two (`HnsPartyMenu_...` defined,
-  plain name never emitted) and produced a late link-time-only failure —
-  same failure mode as the `CanItemBeTossed`/`GetSelectedBoxMonFromPcOrParty`
-  class of bug below, just one level removed. Removed from the rename list;
-  `GetTMHMMoves` stays renamed since nothing calls its plain name from
-  outside the dispatch layer.
-* **A second, larger wave of "missing" symbols only surfaces at the link
-  step, after every `grep "error:"` hit is fixed** — exactly the risk flagged
-  in the working notes going into this stretch. An undeclared *function
-  call* (`GetItemEffect(item)`, `CanItemBeTossed(item)`,
-  `TryItemHoldFormChange(mon, slot)`, `FollowerNPCIsBattlePartner()`, …) only
-  produces an implicit-declaration *warning*, compiles anyway assuming an
-  `int`-returning function, and only fails at `arm-none-eabi-ld` with
-  `undefined reference to '...'`. Caught by grepping the linker's own output
-  for `undefined reference`, not by trusting a 0-compile-error build was
-  finished. ~25 distinct symbols fell in this bucket; each was individually
-  traced to one of:
-  * a real HnS function under a different name (`GetItemPocket` →
-    `ItemId_GetPocket`, `GetItemImportance` → `ItemId_GetImportance`,
-    `IsOnPlayerSide(x)` → `GetBattlerSide(x) == B_SIDE_PLAYER`,
-    `DecompressDataWithHeaderWram` → `LZDecompressWram`, confirming §5.6's
-    predictions);
-  * HnS's real, simpler algorithm for the same job, requiring the calling
-    function's body to be rewritten rather than adapted
-    (`GetEvolutionTargetSpecies` takes 3 args in HnS, not Soulgold's 6 with a
-    `CHECK_EVO`/`DO_EVO` mode flag and an output `canStopEvo`; `CanTeachMove`
-    doesn't exist — HnS's real `CanMonLearnTMTutor(mon, item, tutor)` takes
-    an item-or-0 plus a tutor-index-or-0 instead of one pre-resolved move,
-    which changes every caller, not just the callee);
-  * a private table (`sTMHMMoves`, `sMultiBattlePartnersPartyMask`) that
-    only `party_menu.c`'s own translation unit can see, duplicated here
-    under an `sSwsh`-prefixed name using the same `FOREACH_TMHM` generator
-    macro or literal data HnS's own copy uses — never re-derived by hand;
-  * a genuinely absent system, removed rather than stubbed with invented
-    behaviour, per §5.2's rule: `CanItemBeTossed`/`gText_ItemCantBeTossed`
-    (HnS allows tossing any held item unconditionally — confirmed by reading
-    `CursorCb_Toss`, which has no such check at all), the entire
-    Fusion/Form-Change/Rotom-Catalog/Zygarde-Cube display-and-item-use path
-    (`DisplayPartyPokemonDataForFusion`/`ForFormChange`,
-    `SpriteCB_FormChangeIconMosaic`, the `FUSE_MON`/`UNFUSE_MON` scaffolding),
-    the entire Follower NPC path (`PlayerHasFollowerNPC`,
-    `FollowerNPCIsBattlePartner`, `Task_HideFollowerNPCForTeleport` and its
-    `FNPC_*` state machine), `TryItemHoldFormChange` (four call sites),
-    `IsItemInfiniteHold`/`AddHeldItemToBag`'s infinite-hold branch,
-    `DeleteMove`/`DoesMonHaveAnyMoves` (dead code, confirmed unreferenced
-    anywhere including headers, whose only internal call was itself the
-    source of a `ShiftMoveSlot` signature conflict — HnS's real
-    `ShiftMoveSlot` takes `struct Pokemon *`, not `struct BoxPokemon *`);
-  * one dead function invented wholesale and never wired to anything,
-    `ItemUseCB_BattleScript` — confirmed via the built ROM's own `.map` file
-    that nothing referenced it, not even a data table, then deleted;
-  * one real bug rather than a missing symbol:
-    `HandleLoadSpecialPokePic(TRUE, dest, species, pid)` compiled (the first
-    argument silently truncated to a null-ish pointer) because Soulgold's
-    version of that function takes a `bool` first argument where HnS's takes
-    `const struct CompressedSpriteSheet *src` — fixed to
-    `&gMonFrontPicTable[species]`, HnS's real convention for loading a
-    front-facing special pic (confirmed against `contest_util.c`'s identical
-    pattern), not just silenced.
-* `OpenPokedexPlusHGSSAtSpecies` (viewing the selected party mon's Dex entry)
-  has no standalone equivalent: HnS's `DisplayCaughtMonDexPage` only makes
-  sense mid-catch-sequence (it assumes the catch screen's BG/palette state is
-  already loaded), not as a screen you can jump to cold. Ported as "open the
-  regular Pokédex list" (`CB2_OpenPokedexPlusHGSS`) instead of "jump straight
-  to this species' entry" — a real, intentional reduction in fidelity for
-  this one menu entry, not an oversight; recorded here rather than silently
-  losing the distinction.
-* `sFieldMoveCursorCallbacks`' function-pointer column is unavoidably mixed:
-  8 of its 12 entries (`SetUpFieldMove_Cut`/`Flash`/`RockSmash`/`Strength`/
-  `Teleport`/`Dig`/`SoftBoiled`/`SweetScent`) are real, shared, `bool8`
-  overworld field-effect functions from `fldeff.h`, unrelated to the party
-  menu variant system; the other 4 (`Surf`/`Fly`/`Dive`/`Waterfall`) are this
-  variant's own dispatched functions, forced to `bool32` by the public
-  dispatch signature in `party_menu.h`. Kept the table's field `bool8`
-  (matching HnS's real `data/party_menu.h` table and 8 of 12 entries) and
-  added an explicit `(bool8 (*)(void))` cast at the other 4 call sites,
-  rather than changing the shared field-effect functions' real signatures.
-
-* **Wiring `party_menu_dispatch.c` for real two-way dispatch surfaced four
-  more members of the "genuinely shared, do not duplicate" class** beyond
-  `CanLearnTutorMove`/`GetTMHMMoves` above: `BattleMoveIdToItemId`, `IsMoveHm`,
-  `MoveToHM` (all three pure `sTMHMMoves`-table lookups, no UI) and
-  `ItemUseCB_Mints` (HnS's real, working Nature-Mint item-use handler — not
-  to be confused with Soulgold's differently-named, differently-implemented
-  `Task_Mint`/`ItemUseCB_Mint`, which genuinely doesn't exist in HnS and was
-  correctly deleted earlier) plus `ItemUseCB_PokeBall`. Confirmed by checking
-  which of the 64 dispatched names `swsh_party_menu.c` actually defines a
-  body for (it deliberately has none for these 6, since nothing internal to
-  that file calls them by name) before wiring live dispatch — wiring it
-  blind would have produced six more `undefined reference to
-  'SwShPartyMenu_...'` failures, this time only reachable once a player
-  actually selected the SwSh style and hit one of these paths, rather than
-  at every build. `party_menu_dispatch.c` now uses a separate
-  `SHARED_DISPATCH_RET`/`VOID` macro pair for these 6, forwarding
-  unconditionally to `HnsPartyMenu_...` regardless of `GetPartyMenuStyle()`.
-
-None of the above required inventing new game mechanics — every fix is
-either HnS's own real, existing code (read and matched exactly) or a
-straightforward deletion of a system HnS doesn't have, per §5.2. The dead
-code found and removed here (`ItemUseCB_BattleScript`, `DeleteMove`,
-`DoesMonHaveAnyMoves`, the Fusion/Form-Change display path) was Soulgold's
-own; none of it was reachable from the SwSh menu's real cursor options even
-before this port started trimming it.
-
 ### 5.7 Acceptance
 
 * `make modern` green; memory usage delta recorded and accepted.
@@ -1441,6 +1285,90 @@ before this port started trimming it.
 * Followers are restored correctly after Teleport and after a warp.
 * Switching the option and re-opening the menu takes effect without a reset.
 
+### 5.8 RESOLVED (2026-09-14): SwSh crashed on open — NULL sprite callbacks
+
+**Root cause: seven of the SwSh `SpriteTemplate`s omit `.callback` (and some
+also omit `.anims` / `.affineAnims`), which is harmless on
+pokeemerald-expansion but fatal on HnS's base.**
+
+`CreateSpriteAt` in pokeemerald-expansion (`../soulgold/src/sprite.c`)
+substitutes defaults for missing template fields:
+
+```c
+sprite->anims       = template->anims       ? template->anims       : gDummySpriteAnimTable;
+sprite->affineAnims = template->affineAnims ? template->affineAnims : gDummySpriteAffineAnimTable;
+sprite->callback    = template->callback    ? template->callback    : SpriteCallbackDummy;
+```
+
+HnS's `gflib/sprite.c` assigns them straight through, with no fallbacks. So a
+template that leaves `.callback` unset produces a sprite whose callback is
+NULL, and `AnimateSprites` — identical in both projects — calls it
+unconditionally on the very next frame:
+
+```
+AnimateSprites+0x4c:  ldr r3, [r6, #28]   ; r3 = sprite->callback  (NULL)
+                      bl  _call_via_r3    ; "bx r3"  ->  PC = 0
+```
+
+`bx` to 0 executes the BIOS's ARM reset vector as Thumb, which faults to the
+undefined-instruction vector (0x00000004) and ends up back at the cartridge
+entry point (0x08000000) — i.e. the console appears to "reset to the boot
+screen", exactly the reported symptom. It reproduces 100% of the time because
+the hover-cursor sprite is created during menu setup.
+
+**Fix**: set `.anims` / `.affineAnims` / `.callback` explicitly on every
+SpriteTemplate in `src/data/swsh_party_menu.h`, using the same defaults
+expansion would have substituted (`gDummySpriteAnimTable`,
+`gDummySpriteAffineAnimTable`, `SpriteCallbackDummy`). Minimal blast radius —
+only the ported data changes, no shared engine code is touched. A note above
+the first template records the constraint for anyone adding templates later.
+
+**Correction to an earlier diagnosis in this document's history:** a previous
+session concluded the crash was a hardware *Prefetch Abort* inside a `CpuSet`
+BIOS call. **That was wrong**, and worth recording so nobody repeats it. The
+"evidence" was a trace showing `PC = 0x0000000C` right after `CpuSet`. But
+`CpuSet` is just `svc 11`, and on ARM the SWI vector is at 0x00000008, which
+*reads as 0x0C* because of the +4 instruction-pipeline offset. **Every BIOS
+call in the game passes through that value**, so treating `pc < 0x20` as a
+fault signature produced a false positive on essentially any frame. The
+correct, unambiguous reset signature is `PC` entering the ROM entry region
+(`0x08000000`–`0x080000C0`); detecting only that leads straight to the real
+call chain above in a single trace.
+
+Also disproved along the way, so they need not be re-investigated: the heap is
+healthy at the moment of the crash (peak 65144 of 114672 bytes across 25
+blocks, every block's magic intact, no overflow past the end into `gSprites`,
+largest free block ~49 KB — no exhaustion and no fragmentation); every
+compressed asset's declared decompressed size matches its destination buffer
+exactly; and the port itself is faithful to Soulgold — `ShowPartyMenu`,
+`InitPartyMenu`, `AllocPartyMenuBg`, `DecompressGraphics`,
+`InitPartyMenuWindows`, `LoadPartyMenuWindows`, `LoadPartyMenuBoxes` and
+`ResetPartyMenu` are byte-identical to the originals apart from the deliberate
+`.smol`→`.lz` asset re-encode and the heap-allocated `gComfyAnims`.
+
+
+### 5.9 Pokédex action: ported the "open at species" entry point
+
+The port had reduced `CB2_OpenPartyPokedex` to a bare `CB2_OpenPokedexPlusHGSS()`,
+so the Pokédex action opened at the top of the list and returned to the field
+instead of opening that mon's page and coming back to the party menu.
+
+Soulgold gets this from `OpenPokedexPlusHGSSAtSpecies(species, callback)`, which
+HnS's `pokedex_plus_hgss.c` did not have. Ported it, minimally: four EWRAM
+statics (~12 bytes), a `TrySelectPokedexListDexNum()` helper, the entry point
+itself, and three hooks — select the entry in `LoadPokedexListPage`'s PAGE_MAIN
+branch, jump to the info screen in `Task_OpenPokedexMainPage`, honour the return
+callback in `Task_ClosePokedex`. All of it is inert unless
+`OpenPokedexPlusHGSSAtSpecies` is called, so the normal Pokédex path is
+unchanged.
+
+Checked at the same time, and **not** broken: the HM / field-move path. The SwSh
+menu builds its action list and dispatches to `CursorCb_FieldMove` exactly as
+`party_menu.c` does, and both read the same shared `sFieldMoveCursorCallbacks`
+table in `src/data/party_menu.h`. FLASH showing up for a low-level starter is
+HnS's own "HMs overwrite" challenge option (slot 1 may use Fly/Flash when the HM
+is in the bag), identical in both menus.
+
 ---
 
 ## 6. Defaults, and compatibility with existing saves
@@ -1454,7 +1382,7 @@ Soulgold's values, taken from `../soulgold/src/new_game.c`:
 | Overworld speed | 1x (`:232-233`) | `VarSet(VAR_OVERWORLD_SPEEDUP, OPTIONS_OVERWORLD_SPEED_1X)` | **Landed (Phase 1)** — needed no explicit default write at all; 0 already means 1x. |
 | Battle speed | **2x** (`:144`) | `VarSet(VAR_BATTLE_SPEED, OPTIONS_BATTLE_SPEED_2X)` | **Landed (Phase 2)** — see below, not where this section originally said. |
 | Dark UI | Light / off (`:143`) | (no write needed) | **Landed (Phase 3)** — like overworld speed, needed no explicit default write; 0 already means Light. |
-| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` | **Landed (Phase 4)** |
+| Party menu | `PARTY_MENU_OPTION_CUSTOM` (SwSh) | `VarSet(VAR_PARTY_MENU_STYLE, PARTY_MENU_STYLE_SWSH + 1)` | Planned (Phase 4) |
 
 **Correction, found while landing Phase 2 (§3.8): "set all four in
 `NewGameInitData()`, alongside the existing `gSaveBlock2Ptr->options*`

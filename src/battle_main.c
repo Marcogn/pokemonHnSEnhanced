@@ -3,7 +3,6 @@
 #include "battle_anim.h"
 #include "battle_ai_script_commands.h"
 #include "battle_arena.h"
-#include "battle_bg.h"
 #include "battle_controllers.h"
 #include "battle_interface.h"
 #include "battle_main.h"
@@ -2985,7 +2984,7 @@ void CB2_InitEndLinkBattle(void)
         gBattle_BG3_Y = 0;
 
         InitBattleBgsVideo();
-        LoadCompressedPalette(IsDarkUiEnabled() ? gBattleTextboxPalette_Dark : gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
+        LoadCompressedPalette(gBattleTextboxPalette, BG_PLTT_ID(0), 2 * PLTT_SIZE_4BPP);
         LoadBattleMenuWindowGfx();
         ResetSpriteData();
         ResetTasks();
