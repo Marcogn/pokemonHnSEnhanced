@@ -948,9 +948,44 @@ Method note, worth reusing: to find which palette index paints a given region,
 write saturated marker colours into `gPlttBufferFaded` **and**
 `gPlttBufferUnfaded` (BG base `0x0201cf7c` / `0x0201cb7c` in the current
 build; OBJ starts `+0x200`), run three frames, screenshot. One run identifies
-every index at once. `gSaveBlock1Ptr->vars[]` is at SaveBlock1 **+0x1490** in
+every index at once. To decode many indices in one shot, set entry *i*
+to `RGB(i, 0, 31 - i)` and read *i* back from the rendered red channel. `gSaveBlock1Ptr->vars[]` is at SaveBlock1 **+0x1490** in
 this build — *not* the `/*0x139C*/` comment in `include/global.h`, which is
 stale; derive it by diffing memory around an in-game option toggle.
+
+### 4.9 Second round of index collisions (2026-09-14)
+
+Three more places where HnS' art uses pixel indices a Soulgold-shaped palette
+leaves at 0, found by playtest and confirmed with the probe above:
+
+* **Pocket indicator squares.** Soulgold's `sDarkBagPocketIndicator*Palette`
+  fill only entries 0/1/9 because its tiles (`0xC` / `0x34`) use them. HnS'
+  tiles (`0x17` / `0x2B`) use 10 and 12-14, so the active square rendered
+  black and the inactive ones near-black. Both palettes now carry the
+  indicator colour on every entry except 0 (the tile background); that also
+  makes them immune to any later tile change.
+* **Bag palette index 10.** Darkening it to `189 156 90` in §4.8 flattened the
+  Poké Ball icon, whose highlight is index 10 and whose ring is index 14/20 —
+  same colour, no shape. Now `232 203 133`, brighter than the ring.
+* **Move-category icon.** `sSplitIcons_Pal` / `sSplitIconsEmpty_Pal` paint the
+  backdrop behind the icon white (index 7, shaded by 9). Invisible on the
+  light move window, a white box on the dark one that also covered the first
+  `P` of `PP`. `MoveSelectionDisplaySplitIcon` now overrides those two entries
+  with `DARK_BATTLE_UI_BG_COLOR`, which moved from `src/battle_bg.c` to
+  `include/battle_bg.h` so `battle_controller_player.c` can use it.
+
+Also checked and **not** a problem: the day/night blend. HnS blends BG palettes
+0-12 (`PALETTES_MAP`) and untagged sprite palettes with the time of day, so the
+dark UI slots are in scope — but a night-time playtest (Bag, wild battle,
+command window, move list, healthboxes) showed no tinting artefacts, so
+Soulgold's `TimeMixBattleBgPalette` guard stays unported. Note for the future:
+HnS' day/night code lives in `src/overworld.c` (`UpdatePalettesWithTime`,
+`UpdateSpritePaletteWithTime`) and `src/palette.c`
+(`UpdateTimeOfDayPaletteFade`), not under the Soulgold name.
+
+To force night in the harness, run mGBA under a TZ that puts local time in the
+night window, e.g. `TZ=Pacific/Kiritimati`; check `gTimeOfDay` (`0x030037ce`,
+0 = night).
 
 ---
 

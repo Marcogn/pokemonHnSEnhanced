@@ -205,6 +205,7 @@ static const u8 sUnused[] = {0x48, 0x48, 0x20, 0x5a, 0x50, 0x50, 0x50, 0x58};
 static const u16 sSplitIcons_Pal[] = INCBIN_U16("graphics/battle_interface/split_icons_battle.gbapal");
 static const u8 sSplitIcons_Gfx[] = INCBIN_U8("graphics/battle_interface/split_icons_battle.4bpp");
 static const u16 sSplitIconsEmpty_Pal[] = INCBIN_U16("graphics/battle_interface/split_icons_battle_empty.gbapal");
+static const u16 sDarkSplitIconBackdrop[2] = { DARK_BATTLE_UI_BG_COLOR, RGB(4, 4, 4) };
 static const u8 sSplitIconsEmpty_Gfx[] = INCBIN_U8("graphics/battle_interface/split_icons_battle_empty.4bpp");
 
 void BattleControllerDummy(void)
@@ -3560,6 +3561,14 @@ static void MoveSelectionDisplaySplitIcon(void){
         {
         LoadPalette(sSplitIconsEmpty_Pal, 10 * 0x10, 0x20);
         BlitBitmapToWindow(B_WIN_PSS_ICON, sSplitIconsEmpty_Gfx + 0x80 * moveCategory, 0, 0, 16, 16);
+        }
+    // Both icon palettes paint the backdrop behind the icon white (index 7, with
+    // 9 as its shading), which is invisible on the light move window but shows up
+    // as a white box on the dark one.
+    if (IsDarkUiEnabled())
+        {
+        LoadPalette(sDarkSplitIconBackdrop, 10 * 0x10 + 7, PLTT_SIZEOF(1));
+        LoadPalette(&sDarkSplitIconBackdrop[1], 10 * 0x10 + 9, PLTT_SIZEOF(1));
         }
 	PutWindowTilemap(B_WIN_PSS_ICON);
 	CopyWindowToVram(B_WIN_PSS_ICON, 3);

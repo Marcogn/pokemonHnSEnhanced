@@ -37,7 +37,6 @@ struct BattleBackground
 };
 
 #define BATTLE_MESSAGE_TEXT_PAL_NUM 12
-#define DARK_BATTLE_UI_BG_COLOR     RGB(5, 5, 5)
 
 // The battle message window gets its own palette slot so the dark UI can
 // recolour the text and its background without touching the shared textbox
